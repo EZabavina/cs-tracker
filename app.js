@@ -76,8 +76,9 @@ function countDaysWithoutRecord() {
 
 // Init — UI сразу из localStorage, синхронизация в фоне
 document.addEventListener('DOMContentLoaded', () => {
+    const hasLocalData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
     const syncPromise = (typeof sync !== 'undefined')
-        ? sync.init().then((result) => {
+        ? sync.init({ quiet: hasLocalData }).then((result) => {
             if (result.merged) refreshAppFromStorage();
             return result;
         }).catch(() => {})
@@ -125,9 +126,7 @@ async function retryCloudSync() {
         return;
     }
     sync.setStatus('syncing', 'Синхронизация…');
-    const result = typeof sync.syncNow === 'function'
-        ? await sync.syncNow()
-        : await sync.pullAndMerge();
+    const result = await sync.syncNow();
     if (result.merged && typeof refreshAppFromStorage === 'function') refreshAppFromStorage();
     if (sync.status === 'error' || sync.status === 'disabled') {
         showToastError(sync.statusMessage || 'Синхронизация недоступна');
@@ -172,6 +171,7 @@ function setupTabs() {
 }
 
 function switchView(view) {
+    sync.cancelScheduledPush?.();
     if (view === 'statistics') persistFormToState(false);
     state.currentView = view;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
@@ -184,6 +184,7 @@ function switchView(view) {
 
 // Навигация по датам на главном экране
 function shiftDate(delta) {
+    sync.cancelScheduledPush?.();
     const next = new Date(state.selectedDate);
     next.setDate(next.getDate() + delta);
     if (isAfterToday(next)) return;
@@ -302,6 +303,7 @@ function changeMonth(dir) {
 }
 
 function goTodayCal() {
+    sync.cancelScheduledPush?.();
     persistFormToState(false);
     state.trackerEditMode = false;
     state.currentDate = new Date();
@@ -321,6 +323,7 @@ function selectDate(key) {
     const date = startOfDay(new Date(y, m - 1, d));
     if (isAfterToday(date)) return;
 
+    sync.cancelScheduledPush?.();
     state.trackerEditMode = false;
     persistFormToState(false);
     state.selectedDate = date;
@@ -570,7 +573,7 @@ function persistFormToState(markSaved) {
     if (!hasRecord(entry)) {
         if (prev && !prev.saved) {
             delete state.data[key];
-            storage.saveEntries(state.data);
+            storage.saveEntries(state.data, { skipSync: true });
         }
         return;
     }
@@ -581,7 +584,7 @@ function persistFormToState(markSaved) {
 
     if (!entry.ts) entry.ts = new Date().toISOString();
     state.data[key] = entry;
-    storage.saveEntries(state.data);
+    storage.saveEntries(state.data, { skipSync: true });
 }
 
 function loadDataToForm() {
@@ -693,6 +696,7 @@ function saveData() {
     const key = dateKey(state.selectedDate);
     const entry = readFormEntry();
     entry.saved = true;
+    entry.ts = new Date().toISOString();
     state.data[key] = entry;
     storage.saveEntries(state.data);
     renderExerciseNameSuggestions();

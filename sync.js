@@ -183,7 +183,7 @@ const sync = {
         }[this.status] || 'fa-cloud');
     },
 
-    async init() {
+    async init(opts) {
         await this.ensureConfig();
 
         if (!this.initClient()) {
@@ -196,9 +196,8 @@ const sync = {
         if (!this._onlineBound) {
             this._onlineBound = true;
             window.addEventListener('online', () => {
-                this.setStatus('syncing', 'Сеть восстановлена');
                 this.schedulePush(0);
-                this.syncNow().catch(() => {});
+                this.syncNow({ quiet: true }).catch(() => {});
             });
             window.addEventListener('offline', () => {
                 this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
@@ -210,7 +209,8 @@ const sync = {
             return { merged: false };
         }
 
-        return this.syncNow();
+        const quiet = opts && opts.quiet;
+        return this.syncNow({ quiet });
     },
 
     /** Одна точка входа для синхронизации — без параллельных вызовов. */
@@ -222,6 +222,11 @@ const sync = {
         });
 
         return this._syncPromise;
+    },
+
+    cancelScheduledPush() {
+        clearTimeout(this.pushTimer);
+        this.pushTimer = null;
     },
 
     schedulePush(delayMs) {
@@ -288,23 +293,30 @@ const sync = {
 
                 if (needsPush) {
                     try {
-                        await this.push(true, { skipEmptyGuard: true });
+                        await this.push(true, { skipEmptyGuard: true, quiet: !!quiet });
                     } catch (pushErr) {
-                        this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
+                        if (!quiet) {
+                            this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
+                        }
                         return { merged: true };
                     }
-                    this.setStatus('synced', 'Данные объединены с облаком');
-                } else {
+                    if (!quiet) this.setStatus('synced', 'Данные объединены с облаком');
+                } else if (!quiet) {
                     this.setStatus('synced', 'Данные загружены из облака');
                 }
                 meta.lastPullAt = new Date().toISOString();
                 storage.saveMeta(meta);
+                if (quiet && this.status !== 'error') this.setStatus('synced', 'Синхронизировано');
                 return { merged: true };
             }
 
             meta.lastPullAt = new Date().toISOString();
             storage.saveMeta(meta);
-            this.setStatus('synced', 'Данные актуальны');
+            if (!quiet) {
+                this.setStatus('synced', 'Данные актуальны');
+            } else if (this.status !== 'error') {
+                this.setStatus('synced', 'Синхронизировано');
+            }
             return { merged: false };
         } catch (err) {
             const msg = err.message || String(err);
