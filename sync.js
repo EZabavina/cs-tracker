@@ -55,9 +55,21 @@ const sync = {
     },
 
     getConfig() {
-        if (typeof CST_CONFIG !== 'undefined') return CST_CONFIG;
-        if (typeof window !== 'undefined' && window.CST_CONFIG) return window.CST_CONFIG;
+        if (typeof CST_CONFIG !== 'undefined') return this.normalizeConfig(CST_CONFIG);
+        if (typeof window !== 'undefined' && window.CST_CONFIG) return this.normalizeConfig(window.CST_CONFIG);
         return null;
+    },
+
+    normalizeConfig(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const strip = (v) => String(v ?? '').trim().replace(/^['"]+|['"]+$/g, '');
+        const supabaseUrl = strip(raw.supabaseUrl).replace(/\/$/, '');
+        const supabaseAnonKey = strip(raw.supabaseAnonKey);
+        return {
+            ...raw,
+            supabaseUrl,
+            supabaseAnonKey,
+        };
     },
 
     isConfigured() {
@@ -75,6 +87,9 @@ const sync = {
         const cfg = this.getConfig();
         if (!cfg.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
             return 'В config.js укажите supabaseUrl из Supabase → Settings → API';
+        }
+        if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(cfg.supabaseUrl)) {
+            return 'Неверный supabaseUrl: «' + cfg.supabaseUrl + '» — проверьте GitHub Secret SUPABASE_URL (без лишних кавычек)';
         }
         if (!cfg.supabaseAnonKey || cfg.supabaseAnonKey.includes('YOUR_SUPABASE')) {
             return 'В config.js укажите anon или publishable ключ из Supabase → Settings → API';

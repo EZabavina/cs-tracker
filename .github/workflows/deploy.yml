@@ -39,14 +39,23 @@ jobs:
                   fi
                   node << 'NODE'
                   const fs = require('fs');
+                  function clean(value) {
+                    return String(value || '').trim().replace(/^['"]+|['"]+$/g, '');
+                  }
+                  const supabaseUrl = clean(process.env.SUPABASE_URL);
+                  const supabaseAnonKey = clean(process.env.SUPABASE_ANON_KEY);
+                  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl)) {
+                    console.error('Invalid SUPABASE_URL:', supabaseUrl);
+                    process.exit(1);
+                  }
                   const cfg = {
-                    supabaseUrl: process.env.SUPABASE_URL,
-                    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+                    supabaseUrl: supabaseUrl.replace(/\/$/, ''),
+                    supabaseAnonKey,
                     syncEnabled: true,
                   };
                   const js = 'window.CST_CONFIG = ' + JSON.stringify(cfg, null, 4) + ';\n';
                   fs.writeFileSync('config.js', js);
-                  console.log('config.js written, url:', cfg.supabaseUrl.slice(0, 30) + '...');
+                  console.log('config.js written, url:', cfg.supabaseUrl);
                   NODE
 
             - uses: actions/configure-pages@v5
