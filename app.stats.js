@@ -211,6 +211,8 @@ function exportDoctorReport() {
         `)
         .join('');
 
+    const returnUrl = JSON.stringify(window.location.href.replace(/#.*$/, ''));
+
     const html = `
 <!doctype html>
 <html lang="ru">
@@ -219,6 +221,22 @@ function exportDoctorReport() {
   <title>Отчёт для врача</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color:#1c1c1e; margin:24px; }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 16px;
+      padding: 0.55rem 0.95rem;
+      border: none;
+      border-radius: 980px;
+      background: #007aff;
+      color: #fff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .back-btn:hover { opacity: 0.88; }
     h1 { margin: 0 0 4px; font-size: 22px; }
     h2 { margin: 24px 0 8px; font-size: 16px; }
     .muted { color:#666; font-size:12px; }
@@ -235,10 +253,11 @@ function exportDoctorReport() {
     .spark-zones { display:flex; gap:10px; margin-top:6px; color:#666; font-size:11px; }
     .spark-zone { display:inline-flex; align-items:center; gap:5px; }
     .spark-zone-dot { width:10px; height:10px; border-radius:2px; }
-    @media print { body { margin: 10mm; } }
+    @media print { body { margin: 10mm; } .back-btn { display: none; } }
   </style>
 </head>
 <body>
+  <button type="button" class="back-btn" onclick="goBackToApp()">← Вернуться в приложение</button>
   <h1>Отчёт для врача</h1>
   <div class="muted">Период: ${escapeHtml(periodTitle)} · Сформирован: ${escapeHtml(generatedAt)}</div>
 
@@ -318,6 +337,17 @@ function exportDoctorReport() {
       ${notesRows || '<tr><td colspan="4">Нет записей с упражнениями/заметками/препаратами</td></tr>'}
     </tbody>
   </table>
+  <script>
+    function goBackToApp() {
+      try {
+        if (window.opener && !window.opener.closed) window.opener.focus();
+      } catch (e) {}
+      window.close();
+      setTimeout(function() {
+        if (!window.closed) window.location.href = ${returnUrl};
+      }, 250);
+    }
+  </script>
 </body>
 </html>`;
 

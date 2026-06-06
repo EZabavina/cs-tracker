@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cst-v13';
+const CACHE_VERSION = 'cst-v15';
 const APP_SHELL = [
     './index.html',
     './styles.css',
@@ -33,6 +33,10 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 function isSupabaseRequest(url) {
     return url.hostname.includes('supabase.co');
 }
@@ -42,7 +46,7 @@ function isAppAsset(url) {
 }
 
 function shouldCache(url) {
-    return !url.pathname.endsWith('config.js');
+    return !url.pathname.endsWith('config.js') && !url.pathname.endsWith('sw.js');
 }
 
 function cachePut(request, response) {
@@ -50,6 +54,46 @@ function cachePut(request, response) {
         const copy = response.clone();
         caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
     }
+}
+
+function isNavigateRequest(request) {
+    return request.mode === 'navigate'
+        || request.headers.get('accept')?.includes('text/html');
+}
+
+function isNetworkFirstAsset(url) {
+    const p = url.pathname;
+    if (p.endsWith('config.js') || p.endsWith('sw.js')) return false;
+    if (p.endsWith('/') || p.endsWith('index.html')) return true;
+    return /\.(css|js)$/.test(p);
+}
+
+async function networkFirst(request) {
+    try {
+        const response = await fetch(request);
+        cachePut(request, response);
+        return response;
+    } catch (err) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw err;
+    }
+}
+
+async function staleWhileRevalidate(request) {
+    const cached = await caches.match(request);
+    const networkFetch = fetch(request)
+        .then((response) => {
+            cachePut(request, response);
+            return response;
+        })
+        .catch(() => cached);
+
+    if (cached) {
+        networkFetch.catch(() => {});
+        return cached;
+    }
+    return networkFetch;
 }
 
 self.addEventListener('fetch', (event) => {
@@ -61,21 +105,9 @@ self.addEventListener('fetch', (event) => {
     if (!isAppAsset(url)) return;
     if (url.pathname.endsWith('config.js')) return;
 
-    // Stale-while-revalidate: отдаём кэш сразу, обновляем в фоне
-    event.respondWith(
-        caches.match(request).then((cached) => {
-            const networkFetch = fetch(request)
-                .then((response) => {
-                    cachePut(request, response);
-                    return response;
-                })
-                .catch(() => cached);
+    const strategy = isNavigateRequest(request) || isNetworkFirstAsset(url)
+        ? networkFirst
+        : staleWhileRevalidate;
 
-            if (cached) {
-                networkFetch.catch(() => {});
-                return cached;
-            }
-            return networkFetch;
-        })
-    );
+    event.respondWith(strategy(request));
 });

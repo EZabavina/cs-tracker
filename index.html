@@ -321,10 +321,14 @@
                         <button class="range-btn" data-range="month" onclick="setRange('month',this)">Месяц</button>
                         <button class="range-btn" data-range="3months" onclick="setRange('3months',this)">3 мес</button>
                         <div class="date-picker-group">
-                            <label>От:</label>
-                            <input type="date" id="dateFrom" onchange="setCustomRange()">
-                            <label>До:</label>
-                            <input type="date" id="dateTo" onchange="setCustomRange()">
+                            <div class="date-field">
+                                <label for="dateFrom">От:</label>
+                                <input type="date" id="dateFrom" onchange="setCustomRange()">
+                            </div>
+                            <div class="date-field">
+                                <label for="dateTo">До:</label>
+                                <input type="date" id="dateTo" onchange="setCustomRange()">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -403,8 +407,15 @@
     <script src="app.js"></script>
     <script src="app.stats.js"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v13';
+        const CST_SW_VERSION = 'cst-v15';
         if ('serviceWorker' in navigator) {
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+            });
+
             window.addEventListener('load', async () => {
                 try {
                     const swKey = 'cst_sw_version';
@@ -413,7 +424,17 @@
                         await Promise.all(regs.map((r) => r.unregister()));
                         localStorage.setItem(swKey, CST_SW_VERSION);
                     }
-                    await navigator.serviceWorker.register('./sw.js');
+                    const reg = await navigator.serviceWorker.register('./sw.js');
+                    if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    reg.addEventListener('updatefound', () => {
+                        const worker = reg.installing;
+                        if (!worker) return;
+                        worker.addEventListener('statechange', () => {
+                            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                                worker.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                        });
+                    });
                 } catch (_) {}
             });
         }
