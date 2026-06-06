@@ -106,9 +106,9 @@
         <div class="header-content">
             <div class="header-top">
                 <h1 class="app-title"><i class="fas fa-brain"></i> Central Sensitization Tracker</h1>
-                <span class="sync-status sync-status-disabled" id="syncStatus" title="Статус синхронизации" aria-label="Статус синхронизации">
+                <button type="button" class="sync-status sync-status-disabled" id="syncStatus" onclick="retryCloudSync()" title="Статус синхронизации — нажмите для повтора" aria-label="Статус синхронизации">
                     <i class="fas fa-cloud"></i>
-                </span>
+                </button>
             </div>
             
             <div class="patient-bar" onclick="openProfileModal()" role="button" tabindex="0" aria-label="Открыть профиль пациента" onkeydown="onPatientBarKey(event)">
@@ -399,9 +399,18 @@
     <script src="app.js"></script>
     <script src="app.stats.js"></script>
     <script>
+        const CST_SW_VERSION = 'cst-v11';
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            window.addEventListener('load', async () => {
+                try {
+                    const swKey = 'cst_sw_version';
+                    if (localStorage.getItem(swKey) !== CST_SW_VERSION) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map((r) => r.unregister()));
+                        localStorage.setItem(swKey, CST_SW_VERSION);
+                    }
+                    await navigator.serviceWorker.register('./sw.js');
+                } catch (_) {}
             });
         }
     </script>

@@ -112,35 +112,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSyncStatusButton();
 });
 
+async function retryCloudSync() {
+    if (typeof sync === 'undefined') {
+        showToastError('Модуль синхронизации не загружен');
+        return;
+    }
+    if (typeof sync.ensureConfig === 'function') await sync.ensureConfig();
+    if (!sync.initClient()) {
+        showToastError(sync.getConfigError() || 'Синхронизация не настроена');
+        return;
+    }
+    sync.setStatus('syncing', 'Синхронизация…');
+    const result = typeof sync.syncNow === 'function'
+        ? await sync.syncNow()
+        : await sync.pullAndMerge();
+    if (result.merged && typeof refreshAppFromStorage === 'function') refreshAppFromStorage();
+    if (sync.status === 'error' || sync.status === 'disabled') {
+        showToastError(sync.statusMessage || 'Синхронизация недоступна');
+    } else if (sync.status === 'synced') {
+        showToast('Синхронизация успешна ✓');
+    }
+}
+
 function initSyncStatusButton() {
     const el = document.getElementById('syncStatus');
     if (!el || el.dataset.bound) return;
     el.dataset.bound = '1';
-    el.setAttribute('role', 'button');
-    el.setAttribute('tabindex', '0');
-    el.style.cursor = 'pointer';
 
-    const retry = async () => {
-        await sync.ensureConfig();
-        if (!sync.initClient()) {
-            showToastError(sync.getConfigError() || 'Синхронизация не настроена');
-            return;
-        }
-        sync.setStatus('syncing', 'Синхронизация…');
-        const result = await sync.syncNow();
-        if (result.merged) refreshAppFromStorage();
-        if (sync.status === 'error' || sync.status === 'disabled') {
-            showToastError(sync.statusMessage || 'Синхронизация недоступна');
-        } else if (sync.status === 'synced') {
-            showToast('Синхронизация успешна ✓');
-        }
-    };
-
-    el.addEventListener('click', retry);
     el.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            retry();
+            retryCloudSync();
         }
     });
 }
