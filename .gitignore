@@ -1,0 +1,7 @@
+config.js
+.DS_Store
+.cursor/
+test-results/
+cst_backup_*.json
+*.docx
+~$*
