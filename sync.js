@@ -251,6 +251,29 @@ const sync = {
             return;
         }
 
+        const localEntries = storage.loadEntries();
+        const localDates = Object.keys(localEntries).filter((k) => DATE_KEY_RE.test(k));
+
+        // Не затираем облако пустым localStorage (новый origin / PWA на iOS)
+        if (localDates.length === 0) {
+            try {
+                const { data: remote, error } = await this.client
+                    .from(SYNC_TABLE)
+                    .select('entries')
+                    .eq('id', SYNC_ROW_ID)
+                    .maybeSingle();
+                if (error) throw error;
+                const remoteEntries = remote?.entries && typeof remote.entries === 'object' ? remote.entries : {};
+                const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
+                if (remoteDates.length > 0) {
+                    console.warn('[CST sync] Локально пусто, в облаке есть записи — загружаем из облака');
+                    return this.pullAndMerge();
+                }
+            } catch (err) {
+                console.warn('[CST sync] push guard:', err.message || err);
+            }
+        }
+
         this.pushing = true;
         if (!force) this.setStatus('syncing', 'Отправка в облако…');
 
