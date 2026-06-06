@@ -393,7 +393,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
-    <script src="config.js" onerror="console.error('[CST] Не удалось загрузить config.js. Запустите локальный сервер: python3 -m http.server 8080')"></script>
+    <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="app.js"></script>
