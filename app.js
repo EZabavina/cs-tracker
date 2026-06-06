@@ -534,12 +534,22 @@ function readFormEntry() {
         notes: document.getElementById('notesArea').value,
         meds: document.getElementById('medsInput').value,
         exercises: readExercisesFromForm(),
-        ts: new Date().toISOString()
     };
     SYMPTOMS.forEach(sym => {
         d[sym] = parseInt(document.getElementById('slider' + symId(sym)).value, 10);
     });
     return d;
+}
+
+function entryContentEqual(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    for (const sym of SYMPTOMS) {
+        if ((a[sym] || 0) !== (b[sym] || 0)) return false;
+    }
+    if ((a.notes || '') !== (b.notes || '')) return false;
+    if ((a.meds || '') !== (b.meds || '')) return false;
+    return JSON.stringify(a.exercises || []) === JSON.stringify(b.exercises || []);
 }
 
 function persistFormToState(markSaved) {
@@ -549,17 +559,29 @@ function persistFormToState(markSaved) {
 
     if (markSaved) {
         entry.saved = true;
-    } else if (prev && prev.saved) {
+        entry.ts = new Date().toISOString();
+    } else if (prev?.saved) {
         entry.saved = true;
+        entry.ts = prev.ts;
+    } else if (prev?.ts) {
+        entry.ts = prev.ts;
     }
 
-    if (hasRecord(entry)) {
-        state.data[key] = entry;
-        storage.saveEntries(state.data);
-    } else if (prev && !prev.saved) {
-        delete state.data[key];
-        storage.saveEntries(state.data);
+    if (!hasRecord(entry)) {
+        if (prev && !prev.saved) {
+            delete state.data[key];
+            storage.saveEntries(state.data);
+        }
+        return;
     }
+
+    if (prev && entryContentEqual(entry, prev) && !!entry.saved === !!prev.saved) {
+        return;
+    }
+
+    if (!entry.ts) entry.ts = new Date().toISOString();
+    state.data[key] = entry;
+    storage.saveEntries(state.data);
 }
 
 function loadDataToForm() {

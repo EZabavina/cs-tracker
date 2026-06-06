@@ -214,10 +214,10 @@ const sync = {
     },
 
     /** Одна точка входа для синхронизации — без параллельных вызовов. */
-    async syncNow() {
+    async syncNow(opts) {
         if (this._syncPromise) return this._syncPromise;
 
-        this._syncPromise = this.pullAndMerge().finally(() => {
+        this._syncPromise = this.pullAndMerge(opts).finally(() => {
             this._syncPromise = null;
         });
 
@@ -228,16 +228,24 @@ const sync = {
         if (!this.enabled) return;
         clearTimeout(this.pushTimer);
         this.pushTimer = setTimeout(() => {
-            this.push().catch(() => {});
+            this.push(false, { quiet: true }).catch(() => {});
         }, delayMs ?? SYNC_PUSH_DELAY_MS);
     },
 
-    async pullAndMerge() {
+    async waitForSync() {
+        if (this._syncPromise) {
+            try { await this._syncPromise; } catch (_) { /* ignore */ }
+        }
+    },
+
+    async pullAndMerge(opts) {
         if (!this.enabled) return { merged: false };
         if (this.pulling) return this._syncPromise || { merged: false };
 
+        const quiet = opts && opts.quiet;
+
         this.pulling = true;
-        this.setStatus('syncing', 'Загрузка данных из облака…');
+        if (!quiet) this.setStatus('syncing', 'Загрузка данных из облака…');
 
         try {
             const { data, error } = await this.client
@@ -300,8 +308,12 @@ const sync = {
             return { merged: false };
         } catch (err) {
             const msg = err.message || String(err);
-            this.setStatus('error', msg);
-            console.error('[CST sync]', msg, err);
+            if (!quiet) {
+                this.setStatus('error', msg);
+                console.error('[CST sync]', msg, err);
+            } else {
+                console.warn('[CST sync] pull (quiet):', msg);
+            }
             return { merged: false };
         } finally {
             this.pulling = false;
@@ -309,13 +321,18 @@ const sync = {
     },
 
     async push(force, opts) {
-        if (!this.enabled || this.pushing) return;
+        if (!this.enabled) return;
+
+        const quiet = opts && opts.quiet;
+        const skipGuard = opts && opts.skipEmptyGuard;
+
+        await this.waitForSync();
+
+        if (this.pushing) return;
         if (!navigator.onLine) {
-            this.setStatus('offline', 'Нет сети — отправка отложена');
+            if (!quiet) this.setStatus('offline', 'Нет сети — отправка отложена');
             return;
         }
-
-        const skipGuard = opts && opts.skipEmptyGuard;
 
         if (!skipGuard) {
             const localEntries = storage.loadEntries();
@@ -333,7 +350,7 @@ const sync = {
                     const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
                     if (remoteDates.length > 0) {
                         console.warn('[CST sync] Локально пусто — загружаем из облака');
-                        return this.syncNow();
+                        return this.syncNow({ quiet: true });
                     }
                 } catch (err) {
                     console.warn('[CST sync] push guard:', err.message || err);
@@ -342,7 +359,7 @@ const sync = {
         }
 
         this.pushing = true;
-        if (!force) this.setStatus('syncing', 'Отправка в облако…');
+        if (!force && !quiet) this.setStatus('syncing', 'Отправка в облако…');
 
         try {
             const meta = storage.loadMeta();
@@ -362,9 +379,13 @@ const sync = {
             meta.lastPushAt = new Date().toISOString();
             storage.saveMeta(meta);
 
-            if (!force) this.setStatus('synced', 'Сохранено в облаке');
+            if (!force && !quiet) this.setStatus('synced', 'Сохранено в облаке');
         } catch (err) {
-            this.setStatus('error', err.message || 'Не удалось отправить в облако');
+            if (!quiet) {
+                this.setStatus('error', err.message || 'Не удалось отправить в облако');
+            } else {
+                console.warn('[CST sync] push (quiet):', err.message || err);
+            }
             throw err;
         } finally {
             this.pushing = false;
