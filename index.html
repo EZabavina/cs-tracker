@@ -13,6 +13,9 @@
     <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
     <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://baynvciqzrabqyipwlfa.supabase.co" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <title>Central Sensitization Tracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -391,7 +394,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
     <script src="storage.js"></script>
@@ -399,7 +401,7 @@
     <script src="app.js"></script>
     <script src="app.stats.js"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v12';
+        const CST_SW_VERSION = 'cst-v13';
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', async () => {
                 try {

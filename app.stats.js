@@ -51,8 +51,27 @@ function formatExerciseSummary(entry) {
     }).join('; ');
 }
 
-function exportToExcel() {
-    if (typeof XLSX === 'undefined') {
+let xlsxLoadPromise = null;
+
+function loadXlsxLib() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (!xlsxLoadPromise) {
+        xlsxLoadPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('xlsx load failed'));
+            document.head.appendChild(script);
+        });
+    }
+    return xlsxLoadPromise;
+}
+
+async function exportToExcel() {
+    try {
+        await loadXlsxLib();
+    } catch {
         showToastError('Библиотека Excel не загружена. Проверьте интернет.');
         return;
     }

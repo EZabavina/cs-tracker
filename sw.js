@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cst-v12';
+const CACHE_VERSION = 'cst-v13';
 const APP_SHELL = [
     './index.html',
     './styles.css',
@@ -45,31 +45,37 @@ function shouldCache(url) {
     return !url.pathname.endsWith('config.js');
 }
 
+function cachePut(request, response) {
+    if (response && response.status === 200 && response.type === 'basic' && shouldCache(new URL(request.url))) {
+        const copy = response.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+    }
+}
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
     if (isSupabaseRequest(url)) return;
-
     if (!isAppAsset(url)) return;
-
-    // config.js — не кэшируем и не перехватываем
     if (url.pathname.endsWith('config.js')) return;
 
+    // Stale-while-revalidate: отдаём кэш сразу, обновляем в фоне
     event.respondWith(
         caches.match(request).then((cached) => {
             const networkFetch = fetch(request)
                 .then((response) => {
-                    if (response && response.status === 200 && response.type === 'basic' && shouldCache(url)) {
-                        const copy = response.clone();
-                        caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-                    }
+                    cachePut(request, response);
                     return response;
                 })
                 .catch(() => cached);
 
-            return cached || networkFetch;
+            if (cached) {
+                networkFetch.catch(() => {});
+                return cached;
+            }
+            return networkFetch;
         })
     );
 });

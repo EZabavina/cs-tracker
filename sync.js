@@ -11,6 +11,13 @@ function parseTs(value) {
     return Number.isNaN(ms) ? 0 : ms;
 }
 
+function stableJson(value) {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
+    const keys = Object.keys(value).sort();
+    return '{' + keys.map((k) => JSON.stringify(k) + ':' + stableJson(value[k])).join(',') + '}';
+}
+
 function mergeEntries(local, remote) {
     const merged = { ...local };
     const remoteEntries = remote && typeof remote === 'object' ? remote : {};
@@ -259,23 +266,36 @@ const sync = {
                 data.profile_updated_at
             );
 
-            const entriesChanged = JSON.stringify(localEntries) !== JSON.stringify(mergedEntries);
-            const profileChanged = JSON.stringify(localProfile) !== JSON.stringify(mergedProfile);
+            const entriesChanged = stableJson(localEntries) !== stableJson(mergedEntries);
+            const profileChanged = stableJson(localProfile) !== stableJson(mergedProfile);
 
             if (entriesChanged) storage.saveEntries(mergedEntries, { skipSync: true });
             if (profileChanged) storage.saveProfile(mergedProfile, { skipSync: true });
 
             if (entriesChanged || profileChanged) {
-                try {
-                    await this.push(true, { skipEmptyGuard: true });
-                } catch (pushErr) {
-                    this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
-                    return { merged: true };
+                const remoteEntries = data.entries && typeof data.entries === 'object' ? data.entries : {};
+                const remoteProfile = normalizeProfile(data.profile);
+                const needsPush = (entriesChanged && stableJson(mergedEntries) !== stableJson(remoteEntries))
+                    || (profileChanged && stableJson(mergedProfile) !== stableJson(remoteProfile));
+
+                if (needsPush) {
+                    try {
+                        await this.push(true, { skipEmptyGuard: true });
+                    } catch (pushErr) {
+                        this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
+                        return { merged: true };
+                    }
+                    this.setStatus('synced', 'Данные объединены с облаком');
+                } else {
+                    this.setStatus('synced', 'Данные загружены из облака');
                 }
-                this.setStatus('synced', 'Данные объединены с облаком');
+                meta.lastPullAt = new Date().toISOString();
+                storage.saveMeta(meta);
                 return { merged: true };
             }
 
+            meta.lastPullAt = new Date().toISOString();
+            storage.saveMeta(meta);
             this.setStatus('synced', 'Данные актуальны');
             return { merged: false };
         } catch (err) {

@@ -74,8 +74,15 @@ function countDaysWithoutRecord() {
     return days;
 }
 
-// Init
-document.addEventListener('DOMContentLoaded', async () => {
+// Init — UI сразу из localStorage, синхронизация в фоне
+document.addEventListener('DOMContentLoaded', () => {
+    const syncPromise = (typeof sync !== 'undefined')
+        ? sync.init().then((result) => {
+            if (result.merged) refreshAppFromStorage();
+            return result;
+        }).catch(() => {})
+        : Promise.resolve();
+
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
     updateProfileDisplay();
@@ -101,15 +108,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('dateTo').value = formatDateInput(today);
     initChartFilters();
     initChartCompareFilters();
-
-    try {
-        const result = await sync.init();
-        if (result.merged) refreshAppFromStorage();
-    } catch {
-        // sync.js уже показывает статус ошибки
-    }
-
     initSyncStatusButton();
+
+    // syncPromise — фоновая синхронизация, UI не ждёт
+    void syncPromise;
 });
 
 async function retryCloudSync() {
