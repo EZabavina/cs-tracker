@@ -1,0 +1,59 @@
+# GitHub Pages: config.js создаётся из Secrets (файл в .gitignore).
+#
+# Secrets: SUPABASE_URL, SUPABASE_ANON_KEY
+# Pages → Source: GitHub Actions
+
+name: Deploy to GitHub Pages
+
+on:
+    push:
+        branches: [main, master]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+concurrency:
+    group: pages
+    cancel-in-progress: true
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Create config.js from secrets
+              env:
+                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+                  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+              run: |
+                  if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+                    echo "::error::Добавьте Secrets SUPABASE_URL и SUPABASE_ANON_KEY"
+                    exit 1
+                  fi
+                  node << 'NODE'
+                  const fs = require('fs');
+                  const cfg = {
+                    supabaseUrl: process.env.SUPABASE_URL,
+                    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+                    syncEnabled: true,
+                  };
+                  const js = 'window.CST_CONFIG = ' + JSON.stringify(cfg, null, 4) + ';\n';
+                  fs.writeFileSync('config.js', js);
+                  console.log('config.js written, url:', cfg.supabaseUrl.slice(0, 30) + '...');
+                  NODE
+
+            - uses: actions/configure-pages@v5
+
+            - uses: actions/upload-pages-artifact@v3
+              with:
+                  path: .
+
+            - id: deployment
+              uses: actions/deploy-pages@v4

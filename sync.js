@@ -54,8 +54,14 @@ const sync = {
         return null;
     },
 
+    getConfig() {
+        if (typeof CST_CONFIG !== 'undefined') return CST_CONFIG;
+        if (typeof window !== 'undefined' && window.CST_CONFIG) return window.CST_CONFIG;
+        return null;
+    },
+
     isConfigured() {
-        const cfg = typeof CST_CONFIG !== 'undefined' ? CST_CONFIG : null;
+        const cfg = this.getConfig();
         if (!cfg || cfg.syncEnabled === false) return false;
         return !!(cfg.supabaseUrl && cfg.supabaseAnonKey
             && !cfg.supabaseUrl.includes('YOUR_PROJECT')
@@ -63,10 +69,10 @@ const sync = {
     },
 
     getConfigError() {
-        if (typeof CST_CONFIG === 'undefined') {
-            return 'Не найден config.js на сервере. Для GitHub Pages добавьте Secrets и задеплойте через Actions';
+        if (!this.getConfig()) {
+            return 'Не найден config.js — проверьте ' + new URL('config.js', document.baseURI).href;
         }
-        const cfg = CST_CONFIG;
+        const cfg = this.getConfig();
         if (!cfg.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
             return 'В config.js укажите supabaseUrl из Supabase → Settings → API';
         }
@@ -87,7 +93,7 @@ const sync = {
         const lib = this.getSupabaseLib();
         if (!lib) return false;
 
-        const cfg = CST_CONFIG;
+        const cfg = this.getConfig();
         this.client = lib.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
             auth: {
                 persistSession: false,
@@ -96,6 +102,27 @@ const sync = {
         });
         this.enabled = true;
         return true;
+    },
+
+    getConfigUrl() {
+        return new URL('config.js', document.baseURI).href;
+    },
+
+    async ensureConfig() {
+        if (this.isConfigured()) return true;
+        try {
+            const res = await fetch(this.getConfigUrl(), { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const code = await res.text();
+            const script = document.createElement('script');
+            script.textContent = code;
+            document.head.appendChild(script);
+            script.remove();
+        } catch (err) {
+            console.warn('[CST sync] ensureConfig:', err.message || err);
+            return false;
+        }
+        return this.isConfigured();
     },
 
     setStatus(status, message) {
@@ -135,6 +162,8 @@ const sync = {
     },
 
     async init() {
+        await this.ensureConfig();
+
         if (!this.initClient()) {
             const hint = this.getConfigError() || 'Supabase не настроен — данные только на этом устройстве';
             this.setStatus('disabled', hint);
@@ -198,7 +227,7 @@ const sync = {
             if (error) throw error;
 
             if (!data) {
-                await this.push(true);
+                await this.push(true, { skipEmptyGuard: true });
                 this.setStatus('synced', 'Данные отправлены в облако');
                 return { merged: false };
             }
@@ -223,7 +252,7 @@ const sync = {
 
             if (entriesChanged || profileChanged) {
                 try {
-                    await this.push(true);
+                    await this.push(true, { skipEmptyGuard: true });
                 } catch (pushErr) {
                     this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
                     return { merged: true };
@@ -244,33 +273,36 @@ const sync = {
         }
     },
 
-    async push(force) {
+    async push(force, opts) {
         if (!this.enabled || this.pushing) return;
         if (!navigator.onLine) {
             this.setStatus('offline', 'Нет сети — отправка отложена');
             return;
         }
 
-        const localEntries = storage.loadEntries();
-        const localDates = Object.keys(localEntries).filter((k) => DATE_KEY_RE.test(k));
+        const skipGuard = opts && opts.skipEmptyGuard;
 
-        // Не затираем облако пустым localStorage (новый origin / PWA на iOS)
-        if (localDates.length === 0) {
-            try {
-                const { data: remote, error } = await this.client
-                    .from(SYNC_TABLE)
-                    .select('entries')
-                    .eq('id', SYNC_ROW_ID)
-                    .maybeSingle();
-                if (error) throw error;
-                const remoteEntries = remote?.entries && typeof remote.entries === 'object' ? remote.entries : {};
-                const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
-                if (remoteDates.length > 0) {
-                    console.warn('[CST sync] Локально пусто, в облаке есть записи — загружаем из облака');
-                    return this.pullAndMerge();
+        if (!skipGuard) {
+            const localEntries = storage.loadEntries();
+            const localDates = Object.keys(localEntries).filter((k) => DATE_KEY_RE.test(k));
+
+            if (localDates.length === 0) {
+                try {
+                    const { data: remote, error } = await this.client
+                        .from(SYNC_TABLE)
+                        .select('entries')
+                        .eq('id', SYNC_ROW_ID)
+                        .maybeSingle();
+                    if (error) throw error;
+                    const remoteEntries = remote?.entries && typeof remote.entries === 'object' ? remote.entries : {};
+                    const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
+                    if (remoteDates.length > 0) {
+                        console.warn('[CST sync] Локально пусто — загружаем из облака');
+                        return this.syncNow();
+                    }
+                } catch (err) {
+                    console.warn('[CST sync] push guard:', err.message || err);
                 }
-            } catch (err) {
-                console.warn('[CST sync] push guard:', err.message || err);
             }
         }
 

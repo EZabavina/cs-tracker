@@ -121,7 +121,8 @@ function initSyncStatusButton() {
     el.style.cursor = 'pointer';
 
     const retry = async () => {
-        if (!sync.isConfigured()) {
+        await sync.ensureConfig();
+        if (!sync.initClient()) {
             showToastError(sync.getConfigError() || 'Синхронизация не настроена');
             return;
         }

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cst-v9';
+const CACHE_VERSION = 'cst-v10';
 const APP_SHELL = [
     './index.html',
     './styles.css',
@@ -52,15 +52,10 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(request.url);
     if (isSupabaseRequest(url)) return;
 
-    if (!isAppAsset(url)) {
-        event.respondWith(fetch(request).catch(() => caches.match(request)));
-        return;
-    }
+    if (!isAppAsset(url)) return;
 
-    if (url.pathname.endsWith('config.js')) {
-        event.respondWith(fetch(request, { cache: 'no-store' }));
-        return;
-    }
+    // config.js — не кэшируем и не перехватываем
+    if (url.pathname.endsWith('config.js')) return;
 
     event.respondWith(
         caches.match(request).then((cached) => {
