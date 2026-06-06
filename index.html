@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#007AFF">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CST">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Central Sensitization Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Profile Modal -->
+    <div class="modal-overlay" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle" aria-hidden="true">
+        <div class="modal" tabindex="-1">
+            <div class="modal-header">
+                <h2 id="profileModalTitle"><i class="fas fa-user-circle"></i> Профиль пациента</h2>
+                <button class="modal-close" onclick="closeProfileModal()" aria-label="Закрыть профиль">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="inputName"><i class="fas fa-user"></i> Имя</label>
+                    <input type="text" id="inputName" placeholder="Введите ваше имя">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem;">
+                    <div class="form-group">
+                        <label for="inputGender"><i class="fas fa-venus-mars"></i> Пол</label>
+                        <select id="inputGender">
+                            <option value="">Выберите</option>
+                            <option value="male">Мужской</option>
+                            <option value="female">Женский</option>
+                            <option value="other">Другой</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="inputAge"><i class="fas fa-birthday-cake"></i> Возраст</label>
+                        <input type="number" id="inputAge" placeholder="Возраст" min="1" max="120">
+                    </div>
+                </div>
+                <div class="backup-section">
+                    <div class="backup-title"><i class="fas fa-database"></i> Резервная копия</div>
+                    <p class="backup-hint">Сохраните все записи и профиль в файл JSON или восстановите данные из ранее сохранённой копии.</p>
+                    <div class="backup-actions">
+                        <button type="button" class="btn-backup btn-backup-export" onclick="exportBackup()">
+                            <i class="fas fa-download"></i> Скачать резервную копию
+                        </button>
+                        <button type="button" class="btn-backup btn-backup-import" onclick="triggerImportBackup()">
+                            <i class="fas fa-upload"></i> Восстановить из файла
+                        </button>
+                    </div>
+                    <input type="file" id="backupFileInput" accept=".json,application/json" hidden>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-save" onclick="saveProfile()"><i class="fas fa-save"></i> Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Overlay -->
+    <div class="calendar-overlay" id="calendarOverlay" role="dialog" aria-modal="true" aria-labelledby="calendarTitle" aria-hidden="true">
+        <div class="calendar-popup card" tabindex="-1">
+            <div class="calendar-popup-header">
+                <h3 id="calendarTitle"><i class="fas fa-calendar-alt"></i> Выберите дату</h3>
+                <button class="close-calendar-btn" onclick="closeCalendar()" aria-label="Закрыть календарь">&times;</button>
+            </div>
+            <div class="calendar-popup-body">
+                <div class="calendar-header-row">
+                    <h3 class="calendar-title" id="monthTitle">Январь 2025</h3>
+                    <div class="calendar-nav">
+                        <button class="nav-btn" onclick="changeMonth(-1)" aria-label="Предыдущий месяц"><i class="fas fa-chevron-left"></i></button>
+                        <button class="nav-btn" onclick="goTodayCal()" aria-label="Перейти к сегодняшнему дню"><i class="fas fa-calendar-day"></i></button>
+                        <button class="nav-btn" onclick="changeMonth(1)" aria-label="Следующий месяц"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="weekday-row">
+                    <div class="weekday-label">Пн</div><div class="weekday-label">Вт</div><div class="weekday-label">Ср</div>
+                    <div class="weekday-label">Чт</div><div class="weekday-label">Пт</div><div class="weekday-label">Сб</div><div class="weekday-label">Вс</div>
+                </div>
+                <div class="calendar-grid" id="calendarGrid"></div>
+                <div class="calendar-heat-legend">
+                    <span>Меньше симптомов</span>
+                    <div class="calendar-heat-legend-scale">
+                        <div class="calendar-heat-legend-box level-0"></div>
+                        <div class="calendar-heat-legend-box level-1"></div>
+                        <div class="calendar-heat-legend-box level-2"></div>
+                        <div class="calendar-heat-legend-box level-3"></div>
+                        <div class="calendar-heat-legend-box level-4"></div>
+                    </div>
+                    <span>Больше</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-top">
+                <h1 class="app-title"><i class="fas fa-brain"></i> Central Sensitization Tracker</h1>
+                <span class="sync-status sync-status-disabled" id="syncStatus" title="Статус синхронизации" aria-label="Статус синхронизации">
+                    <i class="fas fa-cloud"></i>
+                </span>
+            </div>
+            
+            <div class="patient-bar" onclick="openProfileModal()" role="button" tabindex="0" aria-label="Открыть профиль пациента" onkeydown="onPatientBarKey(event)">
+                <div class="avatar" id="avatar">?</div>
+                <div class="patient-info">
+                    <div class="patient-name" id="displayName">Нажмите для ввода данных</div>
+                    <div class="patient-meta" id="displayMeta">Возраст • Пол</div>
+                </div>
+                <i class="fas fa-edit" style="opacity:0.7;"></i>
+            </div>
+
+            <nav class="tabs">
+                <button type="button" class="tab-btn active" data-view="tracker"><i class="fas fa-clipboard-list"></i> <span>Симптомы</span></button>
+                <button type="button" class="tab-btn" data-view="statistics"><i class="fas fa-chart-line"></i> <span>Статистика</span></button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="main-content">
+        <!-- Tracker View (DEFAULT) -->
+        <section class="view active" id="viewTracker">
+            <div class="tracker-container">
+                <div class="days-counter" id="daysCounter" style="display:none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:0.82rem;color:#64748b;">Дней без записи симптомов</div>
+                        <div class="days-count" id="daysCount">0</div>
+                    </div>
+                </div>
+
+                <div class="date-display">
+                    <div class="date-nav-row">
+                        <button type="button" class="date-nav-btn" id="datePrevBtn" onclick="shiftDate(-1)" title="Предыдущий день" aria-label="Предыдущий день">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="date-nav-center">
+                            <h2 id="selectedDateText"></h2>
+                            <p class="date-nav-hint">Отметьте интенсивность симптомов от 0 до 10</p>
+                            <div class="day-index" id="dayIndex" aria-label="Общий индекс дня">
+                                <span class="day-index-label">Индекс дня</span>
+                                <span class="day-index-value" id="dayIndexValue">0</span>
+                                <span class="day-index-max">/ 70</span>
+                            </div>
+                            <button type="button" class="date-open-cal-btn" id="calBtn" onclick="openCalendar()" title="Открыть календарь" aria-label="Открыть календарь">
+                                <i class="fas fa-calendar-alt"></i> Календарь
+                            </button>
+                        </div>
+                        <button type="button" class="date-nav-btn" id="dateNextBtn" onclick="shiftDate(1)" title="Следующий день" aria-label="Следующий день">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="trackerSummary" class="tracker-summary" hidden>
+                    <div class="summary-card card">
+                        <div class="summary-header">
+                            <div>
+                                <h3 class="summary-title"><i class="fas fa-check-circle"></i> Запись заполнена</h3>
+                                <p class="summary-meta" id="summaryMeta"></p>
+                            </div>
+                            <div class="summary-avg-badge" id="summaryAvgBadge">—</div>
+                        </div>
+                        <div class="summary-grid" id="summarySymptoms"></div>
+                        <div class="summary-extra" id="summaryExtra"></div>
+                        <div class="summary-actions">
+                            <button type="button" class="btn-edit-record" onclick="enterEditMode()"><i class="fas fa-pen"></i> Редактировать</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="trackerForm">
+                <div class="action-buttons">
+                    <button class="btn-action btn-copy" id="copyBtn" onclick="copyPrevDay()" disabled><i class="fas fa-copy"></i> Копировать с вчера</button>
+                    <button class="btn-action btn-reset" onclick="resetSymptoms()"><i class="fas fa-undo"></i> Сбросить симптомы</button>
+                </div>
+
+                <!-- Pain -->
+                <div class="symptom-cat cat-pain">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-pain"><i class="fas fa-heartbeat"></i></div><span class="symptom-name">Боль</span></div>
+                        <span class="severity-val" id="valPain">0</span>
+                    </div>
+                    <div class="symptom-desc">Хроническая боль, мышечная/суставная, головная, фибромиалгия</div>
+                    <div class="scale-hint"><span>0 = Нет боли</span><span>10 = Нестерпимая боль</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderPain" oninput="updateSlider('pain')" aria-label="Боль, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickPain"></div>
+                </div>
+
+                <!-- Fatigue -->
+                <div class="symptom-cat cat-fatigue">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-fatigue"><i class="fas fa-battery-quarter"></i></div><span class="symptom-name">Утомляемость</span></div>
+                        <span class="severity-val" id="valFatigue">0</span>
+                    </div>
+                    <div class="symptom-desc">Экстремальная усталость, отсутствие энергии, истощение после нагрузки</div>
+                    <div class="scale-hint"><span>0 = Полный энергии</span><span>10 = Полное истощение</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderFatigue" oninput="updateSlider('fatigue')" aria-label="Утомляемость, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickFatigue"></div>
+                </div>
+
+                <!-- Sleep -->
+                <div class="symptom-cat cat-sleep">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-sleep"><i class="fas fa-moon"></i></div><span class="symptom-name">Сон</span></div>
+                        <span class="severity-val" id="valSleep">0</span>
+                    </div>
+                    <div class="symptom-desc">Бессонница, невосстанавливающий сон, трудности с засыпанием</div>
+                    <div class="scale-hint"><span>0 = Отличный сон</span><span>10 = Полная бессонница</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderSleep" oninput="updateSlider('sleep')" aria-label="Сон, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickSleep"></div>
+                </div>
+
+                <!-- Cognitive -->
+                <div class="symptom-cat cat-cognitive">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-cognitive"><i class="fas fa-brain"></i></div><span class="symptom-name">Когнитивные</span></div>
+                        <span class="severity-val" id="valCognitive">0</span>
+                    </div>
+                    <div class="symptom-desc">«Туман в голове» (brain fog), проблемы с памятью, концентрацией, подбор слов</div>
+                    <div class="scale-hint"><span>0 = Ясное мышление</span><span>10 = Полный «туман», не могу сосредоточиться</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderCognitive" oninput="updateSlider('cognitive')" aria-label="Когнитивные симптомы, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickCognitive"></div>
+                </div>
+
+                <!-- Sensory -->
+                <div class="symptom-cat cat-sensory">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-sensory"><i class="fas fa-eye"></i></div><span class="symptom-name">Сенсорная чувствительность</span></div>
+                        <span class="severity-val" id="valSensory">0</span>
+                    </div>
+                    <div class="symptom-desc">Чувствительность к свету, звукам, запахам, прикосновениям, перепадам температуры</div>
+                    <div class="scale-hint"><span>0 = Нормальная чувствительность</span><span>10 = Любое раздражение невыносимо</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderSensory" oninput="updateSlider('sensory')" aria-label="Сенсорная чувствительность, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickSensory"></div>
+                </div>
+
+                <!-- Digestive -->
+                <div class="symptom-cat cat-digestive">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-digestive"><i class="fas fa-bowl-food"></i></div><span class="symptom-name">Пищеварение</span></div>
+                        <span class="severity-val" id="valDigestive">0</span>
+                    </div>
+                    <div class="symptom-desc">СРК (IBS), тошнота, вздутие живота, боли в желудке, расстройства</div>
+                    <div class="scale-hint"><span>0 = Нормальное пищеварение</span><span>10 = Сильные проблемы ЖКТ</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderDigestive" oninput="updateSlider('digestive')" aria-label="Пищеварение, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickDigestive"></div>
+                </div>
+
+                <!-- Emotional -->
+                <div class="symptom-cat cat-emotional">
+                    <div class="symptom-header">
+                        <div class="symptom-info"><div class="symptom-icon icon-emotional"><i class="fas fa-smile"></i></div><span class="symptom-name">Эмоциональное состояние</span></div>
+                        <span class="severity-val" id="valEmotional">0</span>
+                    </div>
+                    <div class="symptom-desc">Тревога, депрессия, перепады настроения, раздражительность, эмоциональное перенапряжение</div>
+                    <div class="scale-hint"><span>0 = Спокойствие, хорошее настроение</span><span>10 = Тяжёлая тревога/депрессия</span></div>
+                    <input type="range" min="0" max="10" value="0" id="sliderEmotional" oninput="updateSlider('emotional')" aria-label="Эмоциональное состояние, интенсивность от 0 до 10">
+                    <div class="quick-select" id="quickEmotional"></div>
+                </div>
+
+                <div class="extra-sections">
+                    <div class="input-card">
+                        <label class="input-label"><i class="fas fa-dumbbell"></i> Упражнения</label>
+                        <datalist id="exerciseNameSuggestions"></datalist>
+                        <div class="exercise-list" id="exerciseList"></div>
+                        <div class="exercise-actions">
+                            <button type="button" class="btn-add-exercise" onclick="addExerciseRow()">
+                                <i class="fas fa-plus"></i> Добавить упражнение
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="input-card">
+                        <label class="input-label" for="medsInput"><i class="fas fa-pills"></i> Лекарства / Добавки</label>
+                        <input type="text" id="medsInput" placeholder="Например: Ибупрофен 400мг, Витамин D, Магний...">
+                    </div>
+                    
+                    <div class="input-card">
+                        <label class="input-label" for="notesArea"><i class="fas fa-sticky-note"></i> Заметки</label>
+                        <textarea id="notesArea" placeholder="Запишите наблюдения, триггеры, самочувствие..."></textarea>
+                    </div>
+                </div>
+
+                <div class="save-section">
+                    <button class="btn-save" onclick="saveData()"><i class="fas fa-save"></i> Сохранить запись</button>
+                </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics View -->
+        <section class="view" id="viewStatistics">
+            <div class="stats-container">
+                <div class="stats-header">
+                    <h2 class="stats-title"><i class="fas fa-chart-bar" style="color:var(--primary);margin-right:0.5rem;"></i> Статистика симптомов</h2>
+                    <div class="range-selector">
+                        <button type="button" class="btn-export-excel" onclick="exportToExcel()" title="Выгрузить в Excel">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <button type="button" class="btn-export-report" onclick="exportDoctorReport()" title="Подготовить отчет для врача">
+                            <i class="fas fa-file-medical"></i> Отчёт для врача
+                        </button>
+                        <button class="range-btn active" data-range="week" onclick="setRange('week',this)">Неделя</button>
+                        <button class="range-btn" data-range="month" onclick="setRange('month',this)">Месяц</button>
+                        <button class="range-btn" data-range="3months" onclick="setRange('3months',this)">3 мес</button>
+                        <div class="date-picker-group">
+                            <label>От:</label>
+                            <input type="date" id="dateFrom" onchange="setCustomRange()">
+                            <label>До:</label>
+                            <input type="date" id="dateTo" onchange="setCustomRange()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="statsGrid"></div>
+
+                <div class="charts-block">
+                    <div class="chart-toolbar chart-toolbar-global">
+                        <div class="chart-toolbar-row">
+                            <span class="chart-toolbar-label">Сравнение</span>
+                            <div class="chart-compare-filters" id="chartCompareFilters"></div>
+                        </div>
+                    </div>
+
+                    <div class="chart-card chart-card-overall">
+                        <h3 class="chart-title"><i class="fas fa-gauge-high" style="color:var(--primary);margin-right:0.4rem;"></i> Общий индекс дня</h3>
+                        <p class="chart-subtitle" id="overallChartSubtitle"></p>
+                        <div class="chart-empty" id="overallChartEmpty">
+                            <div class="empty-state">
+                                <i class="fas fa-gauge-high"></i>
+                                <h3>Нет данных</h3>
+                                <p>Начните отслеживать симптомы и нажмите «Сохранить запись»</p>
+                            </div>
+                        </div>
+                        <div class="spark-chart-wrap" id="overallChartWrap">
+                            <div class="spark-chart-head">
+                                <span class="spark-chart-label">Сумма симптомов за день</span>
+                                <span class="spark-chart-value" id="overallChartLastValue">— / 70</span>
+                            </div>
+                            <svg id="overallIndexChart" class="spark-chart-svg" viewBox="0 0 900 140" preserveAspectRatio="xMidYMid meet" aria-label="Спарклайн общего индекса дня"></svg>
+                            <div class="spark-chart-axis" id="overallChartAxis"></div>
+                            <div class="spark-zones-legend">
+                                <span class="spark-zone"><span class="spark-zone-dot zone-normal"></span>Норма: 0–23</span>
+                                <span class="spark-zone"><span class="spark-zone-dot zone-risk"></span>Риск: 24–46</span>
+                                <span class="spark-zone"><span class="spark-zone-dot zone-high"></span>Высокий: 47–70</span>
+                            </div>
+                            <div class="chart-legend" id="overallChartLegend"></div>
+                        </div>
+                    </div>
+
+                    <div class="chart-card chart-card-symptoms">
+                        <h3 class="chart-title"><i class="fas fa-chart-line" style="color:var(--secondary);margin-right:0.4rem;"></i> Симптомы</h3>
+                        <div class="chart-toolbar">
+                            <div class="chart-toolbar-row">
+                                <span class="chart-toolbar-label">Симптом</span>
+                                <div class="chart-filters" id="chartFilters"></div>
+                            </div>
+                        </div>
+                        <p class="chart-subtitle" id="chartSubtitle"></p>
+                        <div class="chart-empty" id="chartEmpty">
+                            <div class="empty-state">
+                                <i class="fas fa-chart-line"></i>
+                                <h3>Нет данных</h3>
+                                <p>Нет записей за выбранный период</p>
+                            </div>
+                        </div>
+                        <div class="line-chart-wrap" id="lineChartWrap">
+                            <svg id="symptomChart" class="line-chart-svg" viewBox="0 0 900 300" preserveAspectRatio="xMidYMid meet" aria-label="График симптомов"></svg>
+                        </div>
+                        <div class="chart-legend" id="chartLegend"></div>
+                    </div>
+                </div>
+
+                <section class="patterns-card" id="patternsContainer" aria-label="Корреляции и паттерны">
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
+    <script src="config.js" onerror="console.error('[CST] Не удалось загрузить config.js. Запустите локальный сервер: python3 -m http.server 8080')"></script>
+    <script src="storage.js"></script>
+    <script src="sync.js"></script>
+    <script src="app.js"></script>
+    <script src="app.stats.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>

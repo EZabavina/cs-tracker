@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CST">
+  <defs>
+    <linearGradient id="cst-bg" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#007AFF"/>
+      <stop offset="100%" stop-color="#5856D6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#cst-bg)"/>
+  <g fill="#ffffff" transform="translate(256 268)">
+    <path d="M0-108c-62 0-112 42-124 98-10 4-30-2-36 24-6 26 14 48 38 48-6 58 42 104 100 104 24 0 46-10 62-26 16 16 38 26 62 26 58 0 106-46 100-104 24 0 44-22 38-48-6-26-26-20-36-24-12-56-62-98-124-98zm0 36c38 0 68 26 76 62 18-8 36 6 32 28-4 18-22 30-40 26 8 42-26 74-68 74-42 0-76-32-68-74-18 4-36-8-40-26-4-22 14-36 32-28 8-36 38-62 76-62z"/>
+    <path d="M0-52v152" fill="none" stroke="#5856D6" stroke-width="14" stroke-linecap="round" opacity="0.22"/>
+    <path d="M-52 8q28-18 52 12" fill="none" stroke="#007AFF" stroke-width="12" stroke-linecap="round" opacity="0.18"/>
+    <path d="M52 8q-28-18-52 12" fill="none" stroke="#007AFF" stroke-width="12" stroke-linecap="round" opacity="0.18"/>
+    <path d="M-40 52q20 14 36-4" fill="none" stroke="#007AFF" stroke-width="10" stroke-linecap="round" opacity="0.16"/>
+    <path d="M40 52q-20 14-36-4" fill="none" stroke="#007AFF" stroke-width="10" stroke-linecap="round" opacity="0.16"/>
+    <path d="M-28 96q16 12 28-2" fill="none" stroke="#007AFF" stroke-width="9" stroke-linecap="round" opacity="0.14"/>
+    <path d="M28 96q-16 12-28-2" fill="none" stroke="#007AFF" stroke-width="9" stroke-linecap="round" opacity="0.14"/>
+  </g>
+</svg>

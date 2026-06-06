@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "app": "cst",
+  "exportedAt": "2026-05-29T11:33:55.369Z",
+  "entries": {
+    "2026-05-26": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-28T05:50:28.462Z",
+      "pain": 0,
+      "fatigue": 1,
+      "sleep": 4,
+      "cognitive": 4,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 1,
+      "saved": true
+    },
+    "2026-05-25": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-26T19:13:41.227Z",
+      "pain": 0,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 0,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-23": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-28T10:11:32.232Z",
+      "pain": 4,
+      "fatigue": 2,
+      "sleep": 4,
+      "cognitive": 4,
+      "sensory": 4,
+      "digestive": 2,
+      "emotional": 4,
+      "saved": true
+    },
+    "2026-05-24": {
+      "notes": "",
+      "meds": "габаентин",
+      "ts": "2026-05-26T19:13:40.616Z",
+      "pain": 7,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 6,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 3,
+      "saved": true
+    },
+    "2026-05-22": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-26T12:49:26.686Z",
+      "pain": 4,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 4,
+      "sensory": 0,
+      "digestive": 4,
+      "emotional": 4,
+      "saved": true
+    },
+    "2026-05-08": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-25T17:43:29.781Z",
+      "pain": 10,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 0,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-10": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-25T17:43:35.956Z",
+      "pain": 10,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 0,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-21": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-26T12:49:25.824Z",
+      "pain": 0,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 0,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-11": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-25T17:43:46.026Z",
+      "pain": 10,
+      "fatigue": 0,
+      "sleep": 0,
+      "cognitive": 0,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-13": {
+      "notes": "",
+      "meds": "",
+      "ts": "2026-05-26T12:49:18.578Z",
+      "pain": 3,
+      "fatigue": 5,
+      "sleep": 7,
+      "cognitive": 3,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-28": {
+      "notes": "",
+      "meds": "",
+      "exercises": [
+        {
+          "name": "ягодичный мост",
+          "reps": 8,
+          "sets": 3
+        },
+        {
+          "name": "поднятие прямой ноги лежа",
+          "reps": 8,
+          "sets": 3
+        }
+      ],
+      "ts": "2026-05-29T11:32:04.611Z",
+      "pain": 4,
+      "fatigue": 1,
+      "sleep": 2,
+      "cognitive": 3,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-27": {
+      "notes": "",
+      "meds": "",
+      "exercises": [
+        {
+          "name": "ягодичный мост",
+          "reps": 8,
+          "sets": 3
+        }
+      ],
+      "ts": "2026-05-28T12:03:12.730Z",
+      "pain": 5,
+      "fatigue": 3,
+      "sleep": 3,
+      "cognitive": 2,
+      "sensory": 0,
+      "digestive": 0,
+      "emotional": 0,
+      "saved": true
+    },
+    "2026-05-29": {
+      "notes": "",
+      "meds": "",
+      "exercises": [],
+      "ts": "2026-05-29T11:32:35.806Z",
+      "pain": 2,
+      "fatigue": 4,
+      "sleep": 5,
+      "cognitive": 4,
+      "sensory": 0,
+      "digestive": 2,
+      "emotional": 0,
+      "saved": true
+    }
+  },
+  "profile": {
+    "name": "тест",
+    "gender": "female",
+    "age": "39"
+  }
+}
