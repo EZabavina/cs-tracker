@@ -110,13 +110,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initSyncStatusButton();
-
-    // PWA на iOS: повторная синхронизация после полной загрузки и при возврате в приложение
-    window.addEventListener('load', () => {
-        setTimeout(() => sync.retrySync('load').then((r) => {
-            if (r.merged) refreshAppFromStorage();
-        }), 800);
-    });
 });
 
 function initSyncStatusButton() {
@@ -127,16 +120,19 @@ function initSyncStatusButton() {
     el.setAttribute('tabindex', '0');
     el.style.cursor = 'pointer';
 
-    const retry = () => {
-        sync.setStatus('syncing', 'Повторная синхронизация…');
-        sync.retrySync('manual').then((r) => {
-            if (r.merged) refreshAppFromStorage();
-            if (sync.status === 'error' || sync.status === 'disabled') {
-                showToastError(sync.statusMessage || 'Синхронизация недоступна');
-            } else if (sync.status === 'synced') {
-                showToast('Синхронизация успешна ✓');
-            }
-        });
+    const retry = async () => {
+        if (!sync.isConfigured()) {
+            showToastError(sync.getConfigError() || 'Синхронизация не настроена');
+            return;
+        }
+        sync.setStatus('syncing', 'Синхронизация…');
+        const result = await sync.syncNow();
+        if (result.merged) refreshAppFromStorage();
+        if (sync.status === 'error' || sync.status === 'disabled') {
+            showToastError(sync.statusMessage || 'Синхронизация недоступна');
+        } else if (sync.status === 'synced') {
+            showToast('Синхронизация успешна ✓');
+        }
     };
 
     el.addEventListener('click', retry);

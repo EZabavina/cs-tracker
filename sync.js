@@ -64,7 +64,7 @@ const sync = {
 
     getConfigError() {
         if (typeof CST_CONFIG === 'undefined') {
-            return 'Не найден config.js на сервере. Для GitHub Pages добавьте Secrets и задеплойте через Actions (см. .github/workflows/deploy.yml)';
+            return 'Не найден config.js на сервере. Для GitHub Pages добавьте Secrets и задеплойте через Actions';
         }
         const cfg = CST_CONFIG;
         if (!cfg.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
@@ -96,80 +96,6 @@ const sync = {
         });
         this.enabled = true;
         return true;
-    },
-
-    getConfigUrl() {
-        return new URL('config.js', document.baseURI).href;
-    },
-
-    /** Повторная загрузка config.js (обход сбоев PWA / service worker на iOS). */
-    async ensureConfig() {
-        if (this.isConfigured()) return true;
-
-        try {
-            const res = await fetch(this.getConfigUrl(), { cache: 'no-store' });
-            if (!res.ok) throw new Error(`config.js: HTTP ${res.status}`);
-            const code = await res.text();
-            // eslint-disable-next-line no-new-func
-            new Function(code)();
-        } catch (err) {
-            console.warn('[CST sync] ensureConfig:', err.message || err);
-            return false;
-        }
-
-        return this.isConfigured();
-    },
-
-    resetClient() {
-        this.client = null;
-        this.enabled = false;
-    },
-
-    bindLifecycle() {
-        if (this._lifecycleBound) return;
-        this._lifecycleBound = true;
-
-        window.addEventListener('online', () => {
-            this.setStatus('syncing', 'Сеть восстановлена');
-            this.schedulePush(0);
-            this.retrySync('online').catch(() => {});
-        });
-
-        window.addEventListener('offline', () => {
-            this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                this.retrySync('visible').catch(() => {});
-            }
-        });
-
-        window.addEventListener('pageshow', () => {
-            this.retrySync('pageshow').catch(() => {});
-        });
-    },
-
-    async retrySync(reason) {
-        if (this.pulling || this.pushing) return { merged: false };
-
-        await this.ensureConfig();
-        if (!this.client && !this.initClient()) {
-            const hint = this.getConfigError() || 'Supabase не настроен';
-            this.setStatus('disabled', hint);
-            return { merged: false };
-        }
-
-        try {
-            const result = await this.pullAndMerge();
-            if (result.merged && typeof refreshAppFromStorage === 'function') {
-                refreshAppFromStorage();
-            }
-            return result;
-        } catch (err) {
-            console.warn('[CST sync] retrySync (' + reason + '):', err);
-            return { merged: false };
-        }
     },
 
     setStatus(status, message) {
@@ -209,13 +135,6 @@ const sync = {
     },
 
     async init() {
-        this.bindLifecycle();
-
-        // iOS PWA: config.js иногда не успевает через <script> — догружаем fetch-ом
-        if (window.__cstConfigMissing || !this.isConfigured()) {
-            await this.ensureConfig();
-        }
-
         if (!this.initClient()) {
             const hint = this.getConfigError() || 'Supabase не настроен — данные только на этом устройстве';
             this.setStatus('disabled', hint);
@@ -223,13 +142,35 @@ const sync = {
             return { merged: false };
         }
 
-        // navigator.onLine на iOS в standalone часто врёт — всё равно пробуем
-        try {
-            return await this.pullAndMerge();
-        } catch (err) {
-            this.setStatus('error', err.message || 'Не удалось синхронизировать');
+        if (!this._onlineBound) {
+            this._onlineBound = true;
+            window.addEventListener('online', () => {
+                this.setStatus('syncing', 'Сеть восстановлена');
+                this.schedulePush(0);
+                this.syncNow().catch(() => {});
+            });
+            window.addEventListener('offline', () => {
+                this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
+            });
+        }
+
+        if (!navigator.onLine) {
+            this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
             return { merged: false };
         }
+
+        return this.syncNow();
+    },
+
+    /** Одна точка входа для синхронизации — без параллельных вызовов. */
+    async syncNow() {
+        if (this._syncPromise) return this._syncPromise;
+
+        this._syncPromise = this.pullAndMerge().finally(() => {
+            this._syncPromise = null;
+        });
+
+        return this._syncPromise;
     },
 
     schedulePush(delayMs) {
@@ -241,7 +182,9 @@ const sync = {
     },
 
     async pullAndMerge() {
-        if (!this.enabled || this.pulling) return { merged: false };
+        if (!this.enabled) return { merged: false };
+        if (this.pulling) return this._syncPromise || { merged: false };
+
         this.pulling = true;
         this.setStatus('syncing', 'Загрузка данных из облака…');
 
@@ -279,7 +222,12 @@ const sync = {
             if (profileChanged) storage.saveProfile(mergedProfile, { skipSync: true });
 
             if (entriesChanged || profileChanged) {
-                await this.push(true);
+                try {
+                    await this.push(true);
+                } catch (pushErr) {
+                    this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
+                    return { merged: true };
+                }
                 this.setStatus('synced', 'Данные объединены с облаком');
                 return { merged: true };
             }
@@ -287,7 +235,9 @@ const sync = {
             this.setStatus('synced', 'Данные актуальны');
             return { merged: false };
         } catch (err) {
-            this.setStatus('error', err.message || 'Не удалось синхронизировать');
+            const msg = err.message || String(err);
+            this.setStatus('error', msg);
+            console.error('[CST sync]', msg, err);
             return { merged: false };
         } finally {
             this.pulling = false;
@@ -296,6 +246,10 @@ const sync = {
 
     async push(force) {
         if (!this.enabled || this.pushing) return;
+        if (!navigator.onLine) {
+            this.setStatus('offline', 'Нет сети — отправка отложена');
+            return;
+        }
 
         this.pushing = true;
         if (!force) this.setStatus('syncing', 'Отправка в облако…');
