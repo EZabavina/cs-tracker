@@ -1151,6 +1151,8 @@ textarea:focus, input[type="text"]:focus {
 
 .btn-export-report:hover { opacity: 0.85; }
 
+.btn-label-short { display: none; }
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1917,23 +1919,53 @@ textarea:focus, input[type="text"]:focus {
 
     .range-selector {
         width: 100%;
-        padding: 0.35rem;
+        padding: 0.3rem;
+        flex-wrap: wrap;
+        gap: 0.25rem;
     }
+
+    .btn-label-long { display: none; }
+    .btn-label-short { display: inline; }
 
     .range-btn,
     .btn-export-excel,
     .btn-export-report {
-        min-height: 38px;
+        min-height: 34px;
+        padding: 0.3rem 0.5rem;
+        font-size: 0.74rem;
+        flex: 0 0 auto;
+    }
+
+    .btn-export-excel,
+    .btn-export-report {
+        gap: 0.25rem;
+        padding: 0.3rem 0.55rem;
     }
 
     .date-picker-group {
-        flex-direction: column;
-        align-items: stretch;
+        flex-basis: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 0.2rem 0.35rem;
+        align-items: center;
         width: 100%;
-        padding: 0.25rem 0;
+        padding: 0.1rem 0;
     }
 
-    .date-picker-group input { width: 100%; }
+    .date-picker-group label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+    }
+
+    .date-picker-group input {
+        width: 100%;
+        min-width: 0;
+        padding: 0.28rem 0.35rem;
+        font-size: 0.75rem;
+        min-height: 32px;
+        border-radius: 7px;
+    }
 
     .chart-toolbar-label { min-width: auto; width: 100%; }
 
@@ -1960,21 +1992,21 @@ textarea:focus, input[type="text"]:focus {
         -webkit-overflow-scrolling: touch;
     }
 
-    .spark-chart-svg {
+    .spark-chart-svg.chart-svg-mobile {
         width: auto;
         min-width: 100%;
-        height: clamp(180px, 52vw, 220px);
+        height: clamp(140px, 40vw, 170px);
     }
 
-    .line-chart-svg {
+    .line-chart-svg.chart-svg-mobile {
         width: auto;
         min-width: 100%;
-        height: clamp(340px, 88vw, 420px);
+        height: clamp(250px, 68vw, 310px);
     }
 
-    .chart-axis-y { font-size: 13px; }
-    .chart-axis-x { font-size: 12px; }
-    .chart-value { font-size: 12px; }
+    .chart-svg-mobile .chart-axis-y { font-size: 12px; }
+    .chart-svg-mobile .chart-axis-x { font-size: 11px; }
+    .chart-svg-mobile .chart-value { font-size: 11px; }
 
     .spark-chart-axis,
     .spark-zones-legend {
@@ -1983,5 +2015,24 @@ textarea:focus, input[type="text"]:focus {
 
     .chart-legend-item {
         font-size: 0.82rem;
+    }
+}
+
+@media (min-width: 769px) {
+    .spark-chart-svg:not(.chart-svg-mobile) {
+        width: 100%;
+        min-width: 280px;
+        height: auto;
+    }
+
+    .line-chart-svg:not(.chart-svg-mobile) {
+        width: 100%;
+        min-width: 320px;
+        height: auto;
+    }
+
+    .spark-chart-wrap,
+    .line-chart-wrap {
+        overflow-x: visible;
     }
 }

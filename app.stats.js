@@ -807,32 +807,44 @@ function isMobileChartView() {
     return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
 }
 
-function getOverallChartMetrics() {
-    const mobile = isMobileChartView();
+function getMobileOverallChartMetrics() {
     return {
         W: 900,
-        H: mobile ? 200 : 140,
-        pad: mobile ? { t: 18, r: 24, b: 32, l: 44 } : { t: 14, r: 20, b: 24, l: 38 },
-        pointR: mobile ? 6 : 4.5,
-        lineWidth: mobile ? 3.5 : 3,
-        dashedLineWidth: mobile ? 2.5 : 2
+        H: 165,
+        pad: { t: 16, r: 20, b: 28, l: 40 },
+        pointR: 5,
+        lineWidth: 3,
+        dashedLineWidth: 2
     };
 }
 
-function getSymptomsChartMetrics(pointCount) {
-    const mobile = isMobileChartView();
+function getMobileSymptomsChartMetrics(pointCount) {
     const n = Math.max(1, pointCount || 1);
     return {
-        W: mobile ? Math.max(720, n * 48) : 900,
-        H: mobile ? 400 : 300,
-        pad: mobile ? { t: 32, r: 32, b: 60, l: 52 } : { t: 28, r: 28, b: 52, l: 48 },
-        pointR: mobile ? 6.5 : 5,
-        lineWidth: mobile ? 3 : 2.5,
-        dashedLineWidth: mobile ? 2.5 : 2
+        W: Math.max(660, n * 42),
+        H: 320,
+        pad: { t: 28, r: 28, b: 52, l: 48 },
+        pointR: 5.5,
+        lineWidth: 2.5,
+        dashedLineWidth: 2
     };
+}
+
+let chartResizeBound = false;
+
+function bindChartResize() {
+    if (chartResizeBound || typeof window === 'undefined') return;
+    chartResizeBound = true;
+    let timer;
+    window.addEventListener('resize', () => {
+        if (typeof state === 'undefined' || state.currentView !== 'statistics') return;
+        clearTimeout(timer);
+        timer = setTimeout(() => renderCharts(), 150);
+    });
 }
 
 function renderCharts() {
+    bindChartResize();
     initChartCompareFilters();
     initChartFilters();
     renderOverallSparklineChart();
@@ -867,9 +879,17 @@ function renderOverallSparklineChart() {
     if (subtitleEl) subtitleEl.textContent = ctx.subtitle || '';
 
     const n = ctx.labels.length;
-    const metrics = getOverallChartMetrics();
-    const { W, H, pad, pointR, lineWidth, dashedLineWidth } = metrics;
+    const mobile = isMobileChartView();
+    let W, H, pad;
+    if (mobile) {
+        ({ W, H, pad } = getMobileOverallChartMetrics());
+    } else {
+        W = 900;
+        H = 140;
+        pad = { t: 14, r: 20, b: 24, l: 38 };
+    }
     svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svgEl.classList.toggle('chart-svg-mobile', mobile);
     const plotW = W - pad.l - pad.r;
     const plotH = H - pad.t - pad.b;
     const xAt = (i) => pad.l + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
@@ -915,12 +935,13 @@ function renderOverallSparklineChart() {
         if (!ser.dashed) lastRecorded = plotted[plotted.length - 1];
 
         const pathD = buildLinePath(plotted);
-        const width = ser.dashed ? dashedLineWidth : lineWidth;
+        const width = ser.dashed ? (mobile ? 2 : 2) : (mobile ? 3 : 3);
         const dashAttr = ser.dashed ? ' stroke-dasharray="7 5"' : '';
         const stroke = ser.dashed ? '#8E8E93' : overallColor;
         svg += `<path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="${ser.dashed ? 0.85 : 1}"${dashAttr}></path>`;
 
         plotted.forEach(p => {
+            const pointR = mobile ? 5 : 4.5;
             svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${pointR}" fill="${stroke}" stroke="#fff" stroke-width="2">`;
             svg += `<title>Общий индекс · ${ser.label} · ${lblDate(p.date)}: ${p.raw}/70</title></circle>`;
         });
@@ -985,9 +1006,17 @@ function renderSymptomsLineChart() {
 
     const symptoms = getActiveChartSymptoms();
     const n = ctx.labels.length;
-    const metrics = getSymptomsChartMetrics(n);
-    const { W, H, pad, pointR, lineWidth, dashedLineWidth } = metrics;
+    const mobile = isMobileChartView();
+    let W, H, pad;
+    if (mobile) {
+        ({ W, H, pad } = getMobileSymptomsChartMetrics(n));
+    } else {
+        W = 900;
+        H = 300;
+        pad = { t: 28, r: 28, b: 52, l: 48 };
+    }
     svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svgEl.classList.toggle('chart-svg-mobile', mobile);
     const plotW = W - pad.l - pad.r;
     const plotH = H - pad.t - pad.b;
 
@@ -1023,7 +1052,7 @@ function renderSymptomsLineChart() {
             const pathD = buildLinePath(points);
             if (!pathD) return;
 
-            const width = ser.dashed ? dashedLineWidth : lineWidth;
+            const width = ser.dashed ? (mobile ? 2 : 2) : (mobile ? 2.5 : 2.5);
             const opacity = ser.dashed ? 0.8 : 1;
             const dashAttr = ser.dashed ? ' stroke-dasharray="7 5"' : '';
 
@@ -1031,6 +1060,7 @@ function renderSymptomsLineChart() {
 
             points.forEach(p => {
                 if (!p.hasData) return;
+                const pointR = mobile ? 5.5 : 5;
                 svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${pointR}" fill="${color}" stroke="#fff" stroke-width="2">`;
                 svg += `<title>${chartSeriesLabel(sym)} · ${ser.label} · ${lblDate(p.date)}: ${p.raw}/${p.max}</title></circle>`;
                 if (showValues) {
