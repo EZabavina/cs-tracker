@@ -1,6 +1,5 @@
-const CACHE_VERSION = 'cst-v6';
+const CACHE_VERSION = 'cst-v9';
 const APP_SHELL = [
-    './',
     './index.html',
     './styles.css',
     './storage.js',
@@ -18,7 +17,11 @@ const APP_SHELL = [
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+        caches.open(CACHE_VERSION)
+            .then((cache) => Promise.all(
+                APP_SHELL.map((url) => cache.add(url).catch(() => {}))
+            ))
+            .then(() => self.skipWaiting())
     );
 });
 
@@ -38,6 +41,10 @@ function isAppAsset(url) {
     return url.origin === self.location.origin;
 }
 
+function shouldCache(url) {
+    return !url.pathname.endsWith('config.js');
+}
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;
@@ -50,7 +57,6 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // config.js всегда с сети (ключи Supabase не кэшируем)
     if (url.pathname.endsWith('config.js')) {
         event.respondWith(fetch(request, { cache: 'no-store' }));
         return;
@@ -60,7 +66,7 @@ self.addEventListener('fetch', (event) => {
         caches.match(request).then((cached) => {
             const networkFetch = fetch(request)
                 .then((response) => {
-                    if (response && response.status === 200 && response.type === 'basic') {
+                    if (response && response.status === 200 && response.type === 'basic' && shouldCache(url)) {
                         const copy = response.clone();
                         caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
                     }

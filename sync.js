@@ -64,7 +64,7 @@ const sync = {
 
     getConfigError() {
         if (typeof CST_CONFIG === 'undefined') {
-            return 'Не найден config.js на сервере. Для GitHub Pages добавьте Secrets и задеплойте через Actions (см. .github/workflows/deploy.yml)';
+            return 'Не найден config.js на сервере. Для GitHub Pages добавьте Secrets и задеплойте через Actions';
         }
         const cfg = CST_CONFIG;
         if (!cfg.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
@@ -142,22 +142,35 @@ const sync = {
             return { merged: false };
         }
 
-        window.addEventListener('online', () => {
-            this.setStatus('syncing', 'Сеть восстановлена');
-            this.schedulePush(0);
-            this.pullAndMerge().catch(() => {});
-        });
-
-        window.addEventListener('offline', () => {
-            this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
-        });
+        if (!this._onlineBound) {
+            this._onlineBound = true;
+            window.addEventListener('online', () => {
+                this.setStatus('syncing', 'Сеть восстановлена');
+                this.schedulePush(0);
+                this.syncNow().catch(() => {});
+            });
+            window.addEventListener('offline', () => {
+                this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
+            });
+        }
 
         if (!navigator.onLine) {
             this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
             return { merged: false };
         }
 
-        return this.pullAndMerge();
+        return this.syncNow();
+    },
+
+    /** Одна точка входа для синхронизации — без параллельных вызовов. */
+    async syncNow() {
+        if (this._syncPromise) return this._syncPromise;
+
+        this._syncPromise = this.pullAndMerge().finally(() => {
+            this._syncPromise = null;
+        });
+
+        return this._syncPromise;
     },
 
     schedulePush(delayMs) {
@@ -169,7 +182,9 @@ const sync = {
     },
 
     async pullAndMerge() {
-        if (!this.enabled || this.pulling) return { merged: false };
+        if (!this.enabled) return { merged: false };
+        if (this.pulling) return this._syncPromise || { merged: false };
+
         this.pulling = true;
         this.setStatus('syncing', 'Загрузка данных из облака…');
 
@@ -207,7 +222,12 @@ const sync = {
             if (profileChanged) storage.saveProfile(mergedProfile, { skipSync: true });
 
             if (entriesChanged || profileChanged) {
-                await this.push(true);
+                try {
+                    await this.push(true);
+                } catch (pushErr) {
+                    this.setStatus('synced', 'Загружено из облака; отправка: ' + (pushErr.message || 'ошибка'));
+                    return { merged: true };
+                }
                 this.setStatus('synced', 'Данные объединены с облаком');
                 return { merged: true };
             }
@@ -215,7 +235,9 @@ const sync = {
             this.setStatus('synced', 'Данные актуальны');
             return { merged: false };
         } catch (err) {
-            this.setStatus('error', err.message || 'Не удалось синхронизировать');
+            const msg = err.message || String(err);
+            this.setStatus('error', msg);
+            console.error('[CST sync]', msg, err);
             return { merged: false };
         } finally {
             this.pulling = false;
@@ -227,6 +249,29 @@ const sync = {
         if (!navigator.onLine) {
             this.setStatus('offline', 'Нет сети — отправка отложена');
             return;
+        }
+
+        const localEntries = storage.loadEntries();
+        const localDates = Object.keys(localEntries).filter((k) => DATE_KEY_RE.test(k));
+
+        // Не затираем облако пустым localStorage (новый origin / PWA на iOS)
+        if (localDates.length === 0) {
+            try {
+                const { data: remote, error } = await this.client
+                    .from(SYNC_TABLE)
+                    .select('entries')
+                    .eq('id', SYNC_ROW_ID)
+                    .maybeSingle();
+                if (error) throw error;
+                const remoteEntries = remote?.entries && typeof remote.entries === 'object' ? remote.entries : {};
+                const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
+                if (remoteDates.length > 0) {
+                    console.warn('[CST sync] Локально пусто, в облаке есть записи — загружаем из облака');
+                    return this.pullAndMerge();
+                }
+            } catch (err) {
+                console.warn('[CST sync] push guard:', err.message || err);
+            }
         }
 
         this.pushing = true;
