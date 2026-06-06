@@ -803,6 +803,35 @@ function buildLinePath(points) {
     return points.map((p, idx) => `${idx === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 }
 
+function isMobileChartView() {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+}
+
+function getOverallChartMetrics() {
+    const mobile = isMobileChartView();
+    return {
+        W: 900,
+        H: mobile ? 200 : 140,
+        pad: mobile ? { t: 18, r: 24, b: 32, l: 44 } : { t: 14, r: 20, b: 24, l: 38 },
+        pointR: mobile ? 6 : 4.5,
+        lineWidth: mobile ? 3.5 : 3,
+        dashedLineWidth: mobile ? 2.5 : 2
+    };
+}
+
+function getSymptomsChartMetrics(pointCount) {
+    const mobile = isMobileChartView();
+    const n = Math.max(1, pointCount || 1);
+    return {
+        W: mobile ? Math.max(720, n * 48) : 900,
+        H: mobile ? 400 : 300,
+        pad: mobile ? { t: 32, r: 32, b: 60, l: 52 } : { t: 28, r: 28, b: 52, l: 48 },
+        pointR: mobile ? 6.5 : 5,
+        lineWidth: mobile ? 3 : 2.5,
+        dashedLineWidth: mobile ? 2.5 : 2
+    };
+}
+
 function renderCharts() {
     initChartCompareFilters();
     initChartFilters();
@@ -837,12 +866,12 @@ function renderOverallSparklineChart() {
     wrapEl.classList.add('visible');
     if (subtitleEl) subtitleEl.textContent = ctx.subtitle || '';
 
-    const W = 900;
-    const H = 140;
-    const pad = { t: 14, r: 20, b: 24, l: 38 };
+    const n = ctx.labels.length;
+    const metrics = getOverallChartMetrics();
+    const { W, H, pad, pointR, lineWidth, dashedLineWidth } = metrics;
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const plotW = W - pad.l - pad.r;
     const plotH = H - pad.t - pad.b;
-    const n = ctx.labels.length;
     const xAt = (i) => pad.l + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
     const yAt = (v) => pad.t + plotH - (Math.min(70, Math.max(0, v)) / 70) * plotH;
     const normalTop = yAt(23);
@@ -886,13 +915,13 @@ function renderOverallSparklineChart() {
         if (!ser.dashed) lastRecorded = plotted[plotted.length - 1];
 
         const pathD = buildLinePath(plotted);
-        const width = ser.dashed ? 2 : 3;
+        const width = ser.dashed ? dashedLineWidth : lineWidth;
         const dashAttr = ser.dashed ? ' stroke-dasharray="7 5"' : '';
         const stroke = ser.dashed ? '#8E8E93' : overallColor;
         svg += `<path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="${ser.dashed ? 0.85 : 1}"${dashAttr}></path>`;
 
         plotted.forEach(p => {
-            svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="${stroke}" stroke="#fff" stroke-width="2">`;
+            svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${pointR}" fill="${stroke}" stroke="#fff" stroke-width="2">`;
             svg += `<title>Общий индекс · ${ser.label} · ${lblDate(p.date)}: ${p.raw}/70</title></circle>`;
         });
     });
@@ -956,9 +985,9 @@ function renderSymptomsLineChart() {
 
     const symptoms = getActiveChartSymptoms();
     const n = ctx.labels.length;
-    const W = 900;
-    const H = 300;
-    const pad = { t: 28, r: 28, b: 52, l: 48 };
+    const metrics = getSymptomsChartMetrics(n);
+    const { W, H, pad, pointR, lineWidth, dashedLineWidth } = metrics;
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const plotW = W - pad.l - pad.r;
     const plotH = H - pad.t - pad.b;
 
@@ -994,7 +1023,7 @@ function renderSymptomsLineChart() {
             const pathD = buildLinePath(points);
             if (!pathD) return;
 
-            const width = ser.dashed ? 2 : 2.5;
+            const width = ser.dashed ? dashedLineWidth : lineWidth;
             const opacity = ser.dashed ? 0.8 : 1;
             const dashAttr = ser.dashed ? ' stroke-dasharray="7 5"' : '';
 
@@ -1002,7 +1031,7 @@ function renderSymptomsLineChart() {
 
             points.forEach(p => {
                 if (!p.hasData) return;
-                svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" fill="${color}" stroke="#fff" stroke-width="2">`;
+                svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${pointR}" fill="${color}" stroke="#fff" stroke-width="2">`;
                 svg += `<title>${chartSeriesLabel(sym)} · ${ser.label} · ${lblDate(p.date)}: ${p.raw}/${p.max}</title></circle>`;
                 if (showValues) {
                     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y - 10).toFixed(1)}" text-anchor="middle" class="chart-value" fill="${color}">${p.raw}</text>`;

@@ -1953,4 +1953,35 @@ textarea:focus, input[type="text"]:focus {
         min-height: 36px;
         white-space: nowrap;
     }
+
+    .spark-chart-wrap,
+    .line-chart-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .spark-chart-svg {
+        width: auto;
+        min-width: 100%;
+        height: clamp(180px, 52vw, 220px);
+    }
+
+    .line-chart-svg {
+        width: auto;
+        min-width: 100%;
+        height: clamp(340px, 88vw, 420px);
+    }
+
+    .chart-axis-y { font-size: 13px; }
+    .chart-axis-x { font-size: 12px; }
+    .chart-value { font-size: 12px; }
+
+    .spark-chart-axis,
+    .spark-zones-legend {
+        font-size: 0.78rem;
+    }
+
+    .chart-legend-item {
+        font-size: 0.82rem;
+    }
 }
