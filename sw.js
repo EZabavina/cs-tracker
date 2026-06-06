@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cst-v15';
+const CACHE_VERSION = 'cst-v17';
 const APP_SHELL = [
     './index.html',
     './styles.css',

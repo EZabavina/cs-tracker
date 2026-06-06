@@ -104,6 +104,17 @@
         </div>
     </div>
 
+    <!-- Date Range Overlay (mobile) -->
+    <div class="date-range-overlay" id="dateRangeOverlay" aria-hidden="true" onclick="closeDateRangePicker(event)">
+        <div class="date-range-popup" role="dialog" aria-modal="true" aria-labelledby="dateRangeTitle" tabindex="-1" onclick="event.stopPropagation()">
+            <div class="date-range-popup-header">
+                <h3 id="dateRangeTitle">Свой период</h3>
+                <button type="button" class="close-calendar-btn" onclick="closeDateRangePicker()" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="date-range-popup-body" id="dateRangePopupBody"></div>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="app-header">
         <div class="header-content">
@@ -320,14 +331,19 @@
                         <button class="range-btn active" data-range="week" onclick="setRange('week',this)">Неделя</button>
                         <button class="range-btn" data-range="month" onclick="setRange('month',this)">Месяц</button>
                         <button class="range-btn" data-range="3months" onclick="setRange('3months',this)">3 мес</button>
-                        <div class="date-picker-group">
-                            <div class="date-field">
-                                <label for="dateFrom">От:</label>
-                                <input type="date" id="dateFrom" onchange="setCustomRange()">
-                            </div>
-                            <div class="date-field">
-                                <label for="dateTo">До:</label>
-                                <input type="date" id="dateTo" onchange="setCustomRange()">
+                        <button type="button" class="btn-date-range" id="dateRangeBtn" onclick="openDateRangePicker()" aria-label="Выбрать свой период" title="Свой период" aria-expanded="false" aria-controls="dateRangeOverlay">
+                            <i class="fas fa-calendar-days"></i>
+                        </button>
+                        <div class="date-range-desktop" id="dateRangeDesktop">
+                            <div class="date-picker-group" id="datePickerGroup">
+                                <div class="date-field">
+                                    <label for="dateFrom">От:</label>
+                                    <input type="date" id="dateFrom" onchange="setCustomRange()">
+                                </div>
+                                <div class="date-field">
+                                    <label for="dateTo">До:</label>
+                                    <input type="date" id="dateTo" onchange="setCustomRange()">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -407,7 +423,7 @@
     <script src="app.js"></script>
     <script src="app.stats.js"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v15';
+        const CST_SW_VERSION = 'cst-v17';
         if ('serviceWorker' in navigator) {
             let refreshing = false;
             navigator.serviceWorker.addEventListener('controllerchange', () => {

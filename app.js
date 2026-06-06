@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     weekAgo.setDate(weekAgo.getDate() - 7);
     document.getElementById('dateFrom').value = formatDateInput(weekAgo);
     document.getElementById('dateTo').value = formatDateInput(today);
+    mountDateRangePicker();
     initChartFilters();
     initChartCompareFilters();
     initSyncStatusButton();

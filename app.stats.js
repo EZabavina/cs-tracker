@@ -370,6 +370,8 @@ function setRange(range, btn) {
     state.customTo = null;
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    updateDateRangeBtnState();
+    closeDateRangePicker();
     renderStats();
 }
 
@@ -382,7 +384,89 @@ function setCustomRange() {
     if (state.customFrom > state.customTo) return;
     state.currentRange = 'custom';
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    updateDateRangeBtnState();
     renderStats();
+}
+
+function updateDateRangeBtnState() {
+    const btn = document.getElementById('dateRangeBtn');
+    if (!btn) return;
+    const active = state.currentRange === 'custom';
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
+let dateRangeMountBound = false;
+
+function mountDateRangePicker() {
+    const group = document.getElementById('datePickerGroup');
+    const desktop = document.getElementById('dateRangeDesktop');
+    const popup = document.getElementById('dateRangePopupBody');
+    if (!group || !desktop || !popup) return;
+
+    const mobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+    const target = mobile ? popup : desktop;
+
+    if (group.parentElement !== target) {
+        target.appendChild(group);
+    }
+
+    let applyBtn = document.getElementById('dateRangeApplyBtn');
+    if (mobile) {
+        if (!applyBtn) {
+            applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.id = 'dateRangeApplyBtn';
+            applyBtn.className = 'btn-date-range-apply';
+            applyBtn.textContent = 'Применить';
+            applyBtn.onclick = applyDateRangePicker;
+        }
+        if (applyBtn.parentElement !== popup) popup.appendChild(applyBtn);
+    } else if (applyBtn) {
+        applyBtn.remove();
+    }
+
+    if (!dateRangeMountBound && typeof window !== 'undefined') {
+        dateRangeMountBound = true;
+        let timer;
+        window.addEventListener('resize', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                mountDateRangePicker();
+                if (!window.matchMedia('(max-width: 768px)').matches) closeDateRangePicker();
+            }, 150);
+        });
+    }
+
+    if (!mobile) closeDateRangePicker();
+}
+
+function openDateRangePicker() {
+    mountDateRangePicker();
+    const overlay = document.getElementById('dateRangeOverlay');
+    const btn = document.getElementById('dateRangeBtn');
+    if (!overlay) return;
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('date-range-open');
+    overlay.querySelector('.date-range-popup')?.focus();
+}
+
+function closeDateRangePicker(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const overlay = document.getElementById('dateRangeOverlay');
+    const btn = document.getElementById('dateRangeBtn');
+    if (!overlay) return;
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('date-range-open');
+}
+
+function applyDateRangePicker() {
+    setCustomRange();
+    closeDateRangePicker();
 }
 
 function getDatesForStats() {
@@ -504,6 +588,7 @@ function renderStats() {
     });
     document.getElementById('statsGrid').innerHTML = statsHtml;
     renderCharts();
+    updateDateRangeBtnState();
 
     const rows = getExportRowsForPeriod();
     const patternsEl = document.getElementById('patternsContainer');
