@@ -10,7 +10,8 @@ const state = {
     profile: { name: '', gender: '', age: '' },
     chartFilter: 'all',
     chartCompare: 'off',
-    trackerEditMode: false
+    trackerEditMode: false,
+    profileLoading: false
 };
 
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -76,11 +77,13 @@ function countDaysWithoutRecord() {
 
 // Init — UI сразу из localStorage, синхронизация в фоне
 document.addEventListener('DOMContentLoaded', () => {
-    const hasLocalData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+    const hasLocalData = hasLocalEntries();
 
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
-    updateProfileDisplay();
+    const showProfileSkeleton = !hasLocalEntries() && !state.profile.name;
+    if (showProfileSkeleton) setProfileLoading(true);
+    else updateProfileDisplay();
     state.selectedDate = getToday();
     state.currentDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
 
@@ -110,10 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof sync !== 'undefined') {
         setTimeout(() => {
             sync.init({ quiet: hasLocalData }).then((result) => {
-                const nowHasData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+                const nowHasData = hasLocalEntries();
                 if (result.merged || (!hasLocalData && nowHasData)) refreshAppFromStorage();
-            }).catch(() => {});
+            }).catch(() => {}).finally(() => {
+                if (showProfileSkeleton) setProfileLoading(false);
+            });
         }, 0);
+    } else if (showProfileSkeleton) {
+        setProfileLoading(false);
     }
 });
 
@@ -128,16 +135,22 @@ async function retryCloudSync() {
         return;
     }
     sync.setStatus('syncing', 'Синхронизация…');
-    const hadData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
-    const result = await sync.syncNow();
-    const nowHasData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
-    if ((result.merged || (!hadData && nowHasData)) && typeof refreshAppFromStorage === 'function') {
-        refreshAppFromStorage();
-    }
-    if (sync.status === 'error' || sync.status === 'disabled') {
-        showToastError(sync.statusMessage || 'Синхронизация недоступна');
-    } else if (sync.status === 'synced') {
-        showToast('Синхронизация успешна ✓');
+    const hadData = hasLocalEntries();
+    const showProfileSkeleton = !state.profile.name && !hadData;
+    if (showProfileSkeleton) setProfileLoading(true);
+    try {
+        const result = await sync.syncNow();
+        const nowHasData = hasLocalEntries();
+        if ((result.merged || (!hadData && nowHasData)) && typeof refreshAppFromStorage === 'function') {
+            refreshAppFromStorage();
+        }
+        if (sync.status === 'error' || sync.status === 'disabled') {
+            showToastError(sync.statusMessage || 'Синхронизация недоступна');
+        } else if (sync.status === 'synced') {
+            showToast('Синхронизация успешна ✓');
+        }
+    } finally {
+        if (showProfileSkeleton) setProfileLoading(false);
     }
 }
 
@@ -792,10 +805,35 @@ function saveProfile() {
     }
 }
 
+function hasLocalEntries() {
+    return Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+}
+
+function setProfileLoading(loading) {
+    state.profileLoading = !!loading;
+    updateProfileDisplay();
+}
+
 function updateProfileDisplay() {
+    const bar = document.getElementById('patientBar');
     const avatar = document.getElementById('avatar');
     const nameEl = document.getElementById('displayName');
     const metaEl = document.getElementById('displayMeta');
+
+    if (state.profileLoading) {
+        bar?.classList.add('is-loading');
+        bar?.setAttribute('aria-busy', 'true');
+        avatar.textContent = '';
+        avatar.classList.add('skeleton-block');
+        nameEl.innerHTML = '<span class="skeleton-block skeleton-line skeleton-line-lg" aria-hidden="true"></span>';
+        metaEl.innerHTML = '<span class="skeleton-block skeleton-line skeleton-line-sm" aria-hidden="true"></span>';
+        return;
+    }
+
+    bar?.classList.remove('is-loading');
+    bar?.removeAttribute('aria-busy');
+    avatar.classList.remove('skeleton-block');
+
     if (state.profile.name) {
         avatar.textContent = state.profile.name[0].toUpperCase();
         nameEl.textContent = state.profile.name;
