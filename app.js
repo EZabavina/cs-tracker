@@ -109,20 +109,66 @@ document.addEventListener('DOMContentLoaded', () => {
     initChartCompareFilters();
     initSyncStatusButton();
 
+    initSyncResume();
+
     // Синхронизация после отрисовки UI; Supabase грузится лениво в sync.js
     if (typeof sync !== 'undefined') {
         setTimeout(() => {
-            sync.init({ quiet: hasLocalData }).then((result) => {
-                const nowHasData = hasLocalEntries();
-                if (result.merged || (!hasLocalData && nowHasData)) refreshAppFromStorage();
-            }).catch(() => {}).finally(() => {
-                if (showProfileSkeleton) setProfileLoading(false);
-            });
+            runInitialCloudSync(hasLocalData, showProfileSkeleton);
         }, 0);
     } else if (showProfileSkeleton) {
         setProfileLoading(false);
     }
 });
+
+function storageFingerprint() {
+    return JSON.stringify(storage.loadEntries()) + '|' + JSON.stringify(storage.loadProfile());
+}
+
+function applySyncToUi(beforeFp) {
+    const changed = storageFingerprint() !== beforeFp;
+    if (changed) refreshAppFromStorage();
+}
+
+async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {
+    const beforeFp = storageFingerprint();
+    try {
+        await sync.init({ quiet: hasLocalData });
+        applySyncToUi(beforeFp);
+    } catch (_) { /* ignore */ }
+    finally {
+        if (showProfileSkeleton) setProfileLoading(false);
+    }
+}
+
+function initSyncResume() {
+    if (typeof window === 'undefined') return;
+    let resumeTimer = null;
+
+    const resumeCloudSync = () => {
+        clearTimeout(resumeTimer);
+        resumeTimer = setTimeout(async () => {
+            if (typeof sync === 'undefined') return;
+            if (!sync.enabled && typeof sync.initClient === 'function' && !(await sync.initClient())) return;
+
+            const beforeFp = storageFingerprint();
+            try {
+                await sync.syncNow({ quiet: true });
+                if (sync.status === 'synced' || sync.status === 'offline') {
+                    applySyncToUi(beforeFp);
+                }
+            } catch (_) { /* ignore */ }
+        }, 250);
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') resumeCloudSync();
+    });
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) resumeCloudSync();
+    });
+    window.addEventListener('focus', resumeCloudSync);
+}
 
 async function retryCloudSync() {
     if (typeof sync === 'undefined') {
@@ -138,12 +184,10 @@ async function retryCloudSync() {
     const hadData = hasLocalEntries();
     const showProfileSkeleton = !state.profile.name && !hadData;
     if (showProfileSkeleton) setProfileLoading(true);
+    const beforeFp = storageFingerprint();
     try {
-        const result = await sync.syncNow();
-        const nowHasData = hasLocalEntries();
-        if ((result.merged || (!hadData && nowHasData)) && typeof refreshAppFromStorage === 'function') {
-            refreshAppFromStorage();
-        }
+        await sync.syncNow();
+        applySyncToUi(beforeFp);
         if (sync.status === 'error' || sync.status === 'disabled') {
             showToastError(sync.statusMessage || 'Синхронизация недоступна');
         } else if (sync.status === 'synced') {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cst-v20';
+const CACHE_VERSION = 'cst-v21';
 const APP_SHELL = [
     './index.html',
     './styles.css',
@@ -70,7 +70,7 @@ function isNetworkFirstAsset(url) {
 
 async function networkFirst(request) {
     try {
-        const response = await fetch(request);
+        const response = await fetch(request, { cache: 'no-store' });
         cachePut(request, response);
         return response;
     } catch (err) {
