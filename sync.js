@@ -5,6 +5,7 @@ const SYNC_TABLE = 'cst_app_data';
 const SYNC_ROW_ID = 'main';
 const SYNC_PUSH_DELAY_MS = 800;
 const SYNC_FETCH_TIMEOUT_MS = 12000;
+const SUPABASE_LIB_TIMEOUT_MS = 15000;
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js';
 
 let supabaseLoadPromise = null;
@@ -28,8 +29,21 @@ function loadSupabaseLib() {
             };
             document.head.appendChild(script);
         });
+        supabaseLoadPromise = withTimeout(
+            supabaseLoadPromise,
+            SUPABASE_LIB_TIMEOUT_MS,
+            'Таймаут загрузки библиотеки Supabase'
+        ).catch((err) => {
+            supabaseLoadPromise = null;
+            throw err;
+        });
     }
     return supabaseLoadPromise;
+}
+
+function countStoredDates(entries) {
+    const data = entries && typeof entries === 'object' ? entries : {};
+    return Object.keys(data).filter((k) => DATE_KEY_RE.test(k)).length;
 }
 
 function withTimeout(promise, ms, message) {
@@ -245,13 +259,9 @@ const sync = {
                 this.syncNow({ quiet: true }).catch(() => {});
             });
             window.addEventListener('offline', () => {
+                if (this.pulling || this.pushing) return;
                 this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
             });
-        }
-
-        if (!navigator.onLine) {
-            this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
-            return { merged: false };
         }
 
         const quiet = opts && opts.quiet;
@@ -311,8 +321,13 @@ const sync = {
             if (error) throw error;
 
             if (!data) {
-                await this.push(true, { skipEmptyGuard: true });
-                this.setStatus('synced', 'Данные отправлены в облако');
+                const localDates = countStoredDates(storage.loadEntries());
+                if (localDates > 0) {
+                    await this.push(true, { skipEmptyGuard: true });
+                    if (!quiet) this.setStatus('synced', 'Данные отправлены в облако');
+                } else if (!quiet) {
+                    this.setStatus('synced', 'В облаке пока нет данных');
+                }
                 return { merged: false };
             }
 
@@ -369,8 +384,13 @@ const sync = {
             return { merged: false };
         } catch (err) {
             const msg = err.message || String(err);
-            if (!quiet) {
-                this.setStatus('error', msg);
+            const localEmpty = countStoredDates(storage.loadEntries()) === 0;
+            const isOffline = !navigator.onLine
+                || /failed to fetch|network|load failed|offline|таймаут/i.test(msg);
+            if (!quiet || localEmpty) {
+                this.setStatus(isOffline ? 'offline' : 'error', isOffline
+                    ? 'Нет сети — нажмите облако для повтора'
+                    : msg);
                 console.error('[CST sync]', msg, err);
             } else {
                 console.warn('[CST sync] pull (quiet):', msg);
@@ -390,10 +410,6 @@ const sync = {
         await this.waitForSync();
 
         if (this.pushing) return;
-        if (!navigator.onLine) {
-            if (!quiet) this.setStatus('offline', 'Нет сети — отправка отложена');
-            return;
-        }
 
         if (!skipGuard) {
             const localEntries = storage.loadEntries();
@@ -450,10 +466,15 @@ const sync = {
 
             if (!force && !quiet) this.setStatus('synced', 'Сохранено в облаке');
         } catch (err) {
+            const msg = err.message || 'Не удалось отправить в облако';
+            const isOffline = !navigator.onLine
+                || /failed to fetch|network|load failed|offline|таймаут/i.test(msg);
             if (!quiet) {
-                this.setStatus('error', err.message || 'Не удалось отправить в облако');
+                this.setStatus(isOffline ? 'offline' : 'error', isOffline
+                    ? 'Нет сети — отправка отложена'
+                    : msg);
             } else {
-                console.warn('[CST sync] push (quiet):', err.message || err);
+                console.warn('[CST sync] push (quiet):', msg);
             }
             throw err;
         } finally {

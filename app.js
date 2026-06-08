@@ -110,7 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof sync !== 'undefined') {
         setTimeout(() => {
             sync.init({ quiet: hasLocalData }).then((result) => {
-                if (result.merged) refreshAppFromStorage();
+                const nowHasData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+                if (result.merged || (!hasLocalData && nowHasData)) refreshAppFromStorage();
             }).catch(() => {});
         }, 0);
     }
@@ -127,8 +128,12 @@ async function retryCloudSync() {
         return;
     }
     sync.setStatus('syncing', 'Синхронизация…');
+    const hadData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
     const result = await sync.syncNow();
-    if (result.merged && typeof refreshAppFromStorage === 'function') refreshAppFromStorage();
+    const nowHasData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+    if ((result.merged || (!hadData && nowHasData)) && typeof refreshAppFromStorage === 'function') {
+        refreshAppFromStorage();
+    }
     if (sync.status === 'error' || sync.status === 'disabled') {
         showToastError(sync.statusMessage || 'Синхронизация недоступна');
     } else if (sync.status === 'synced') {
