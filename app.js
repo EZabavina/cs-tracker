@@ -658,7 +658,7 @@ function renderDaySummary(entry) {
     const filledCount = SYMPTOMS.filter(s => (entry[s] || 0) > 0).length;
     const savedLabel = entry.saved ? 'Сохранено' : 'Черновик';
 
-    document.getElementById('summaryAvgBadge').textContent = String(sum);
+    document.getElementById('summarySumBadge').textContent = String(sum);
     document.getElementById('summaryMeta').textContent =
         `${filledCount} из ${SYMPTOMS.length} симптомов отмечено · ${savedLabel}`;
 

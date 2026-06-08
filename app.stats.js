@@ -157,7 +157,7 @@ function exportDoctorReport() {
     const periodTitle = getStatsPeriodTitle();
     const generatedAt = new Date().toLocaleString('ru-RU');
     const daySums = rows.map(r => calcEntrySum(r.entry));
-    const avgIndex = daySums.reduce((a, b) => a + b, 0) / daySums.length;
+    const totalIndex = daySums.reduce((a, b) => a + b, 0);
     const maxIndex = Math.max(...daySums);
     const minIndex = Math.min(...daySums);
     const sparkW = 520;
@@ -187,11 +187,10 @@ function exportDoctorReport() {
     const symptomRows = SYMPTOMS.map(sym => {
         const values = rows.map(r => r.entry[sym] ?? 0);
         const sum = values.reduce((a, b) => a + b, 0);
-        const avg = sum / values.length;
         const trend = calcTrend(sym, rows.map(r => r.date));
         return {
             label: LABELS[sym],
-            avg: avg.toFixed(1),
+            sum,
             min: Math.min(...values),
             max: Math.max(...values),
             trend: trend.html.replace(/<[^>]+>/g, '').trim(),
@@ -271,7 +270,7 @@ function exportDoctorReport() {
   <h2>Общая сводка</h2>
   <div class="grid">
     <div class="card"><div class="muted">Записей</div><div class="big">${rows.length}</div></div>
-    <div class="card"><div class="muted">Средний индекс дня</div><div class="big">${avgIndex.toFixed(1)} / 70</div></div>
+    <div class="card"><div class="muted">Сумма индексов за период</div><div class="big">${totalIndex}</div></div>
     <div class="card"><div class="muted">Минимальный индекс</div><div class="big">${minIndex}</div></div>
     <div class="card"><div class="muted">Максимальный индекс</div><div class="big">${maxIndex}</div></div>
   </div>
@@ -304,12 +303,12 @@ function exportDoctorReport() {
     </div>
   </div>
 
-  <h2>Симптомы (средние значения за период)</h2>
+  <h2>Симптомы (суммы за период)</h2>
   <table>
     <thead>
       <tr>
         <th>Симптом</th>
-        <th>Среднее</th>
+        <th>Сумма</th>
         <th>Мин</th>
         <th>Макс</th>
         <th>Тренд</th>
@@ -319,7 +318,7 @@ function exportDoctorReport() {
       ${symptomRows.map(r => `
         <tr>
           <td>${escapeHtml(r.label)}</td>
-          <td>${escapeHtml(r.avg)}</td>
+          <td>${escapeHtml(String(r.sum))}</td>
           <td>${escapeHtml(String(r.min))}</td>
           <td>${escapeHtml(String(r.max))}</td>
           <td>${escapeHtml(r.trend)}</td>
@@ -492,7 +491,7 @@ function getDatesForStats() {
 }
 
 /**
- * Тренд: сравнение среднего за раннюю и позднюю половину периода (по хронологии дат).
+ * Тренд: сравнение суммы за раннюю и позднюю половину периода (по хронологии дат).
  * Рост симптома → стрелка вверх; снижение → вниз. Красный при росте ≥ 30%.
  */
 function calcTrendFromSeries(series) {
@@ -542,8 +541,8 @@ function renderStats() {
         .map(d => state.data[dateKey(d)])
         .filter(hasRecord);
     const daySums = dayEntries.map(calcEntrySum);
-    const avgIndex = daySums.length
-        ? (daySums.reduce((a, b) => a + b, 0) / daySums.length)
+    const totalIndex = daySums.length
+        ? daySums.reduce((a, b) => a + b, 0)
         : null;
     const indexTrend = calcTrendFromSeries(daySums);
 
@@ -555,9 +554,9 @@ function renderStats() {
                     <span class="stat-label-title">Общий индекс дня</span>
                     <span class="stat-trend ${indexTrend.cls}">${indexTrend.html}</span>
                 </div>
-                <span class="stat-value">${avgIndex === null ? '--' : avgIndex.toFixed(1) + '/70'}</span>
+                <span class="stat-value">${totalIndex === null ? '--' : totalIndex}</span>
             </div>
-            <div class="stat-label-desc">${daySums.length} дн. · средний суммарный индекс за день</div>
+            <div class="stat-label-desc">${daySums.length} дн. · сумма индексов за период</div>
         </div>`;
 
     SYMPTOMS.forEach(sym => {
@@ -569,8 +568,9 @@ function renderStats() {
         const sum = vals.length > 0
             ? vals.reduce((a, b) => a + b, 0)
             : '--';
-        const avgForColor = vals.length > 0 ? (sum / vals.length) : null;
-        const valueCls = avgForColor !== null && avgForColor >= 7 ? 'stat-value stat-value-high' : 'stat-value';
+        const valueCls = vals.length > 0 && sum >= vals.length * 7
+            ? 'stat-value stat-value-high'
+            : 'stat-value';
         const trend = calcTrend(sym, dates);
 
         statsHtml += `
@@ -648,11 +648,10 @@ function renderStats() {
         dowSums[idx] += calcEntrySum(entry);
         dowCounts[idx] += 1;
     });
-    const dowAvg = dowSums.map((s, i) => dowCounts[i] ? s / dowCounts[i] : null);
     const weekdayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
     let maxDow = null, minDow = null;
-    dowAvg.forEach((v, i) => {
-        if (v == null) return;
+    dowSums.forEach((v, i) => {
+        if (!dowCounts[i]) return;
         if (!maxDow || v > maxDow.v) maxDow = { i, v };
         if (!minDow || v < minDow.v) minDow = { i, v };
     });
@@ -668,14 +667,14 @@ function renderStats() {
     const hasExerciseData = exerciseLoad.some(v => v > 0);
     if (hasExerciseData && exercisePainCorr != null) {
         const direction = exercisePainCorr > 0 ? 'выше' : 'ниже';
-        items.push(`Нагрузка упражнений и боль: r=${exercisePainCorr.toFixed(2)} — при большей нагрузке боль в среднем ${direction}.`);
+        items.push(`Нагрузка упражнений и боль: r=${exercisePainCorr.toFixed(2)} — при большей нагрузке боль ${direction}.`);
     }
     if (hasExerciseData && exerciseIndexCorr != null) {
         const direction = exerciseIndexCorr > 0 ? 'выше' : 'ниже';
-        items.push(`Нагрузка упражнений и общий индекс дня: r=${exerciseIndexCorr.toFixed(2)} — индекс в среднем ${direction} при росте нагрузки.`);
+        items.push(`Нагрузка упражнений и общий индекс дня: r=${exerciseIndexCorr.toFixed(2)} — индекс ${direction} при росте нагрузки.`);
     }
     if (maxDow && minDow && Math.abs(maxDow.v - minDow.v) >= 3) {
-        items.push(`По дням недели нагрузка максимальна в ${weekdayNames[maxDow.i]} и минимальна в ${weekdayNames[minDow.i]} (разница ≈ ${Math.round(maxDow.v - minDow.v)} баллов по индексу дня).`);
+        items.push(`По дням недели сумма индексов максимальна в ${weekdayNames[maxDow.i]} и минимальна в ${weekdayNames[minDow.i]} (разница ≈ ${Math.round(maxDow.v - minDow.v)}).`);
     }
     if (!items.length) {
         items.push('Паттерны по периоду не выражены (недостаточно данных или слабые связи).');
@@ -718,7 +717,7 @@ function getSymptomValue(date, sym) {
     if (!hasRecord(entry)) return { v: 0, hasData: false };
     if (sym === 'overall') {
         const sum = calcEntrySum(entry);
-        return { v: sum / SYMPTOMS.length, raw: sum, max: 70, hasData: true };
+        return { v: sum, raw: sum, max: 70, hasData: true };
     }
     const value = entry[sym] ?? 0;
     return { v: value, raw: value, max: 10, hasData: true };

@@ -492,7 +492,7 @@ body {
     margin-top: 0.25rem;
 }
 
-.summary-avg-badge {
+.summary-sum-badge {
     background: linear-gradient(135deg, var(--primary-light), #fce7f3);
     color: var(--primary);
     font-size: 1.5rem;
