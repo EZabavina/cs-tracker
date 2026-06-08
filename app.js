@@ -77,12 +77,6 @@ function countDaysWithoutRecord() {
 // Init — UI сразу из localStorage, синхронизация в фоне
 document.addEventListener('DOMContentLoaded', () => {
     const hasLocalData = Object.keys(storage.loadEntries()).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
-    const syncPromise = (typeof sync !== 'undefined')
-        ? sync.init({ quiet: hasLocalData }).then((result) => {
-            if (result.merged) refreshAppFromStorage();
-            return result;
-        }).catch(() => {})
-        : Promise.resolve();
 
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
@@ -112,8 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initChartCompareFilters();
     initSyncStatusButton();
 
-    // syncPromise — фоновая синхронизация, UI не ждёт
-    void syncPromise;
+    // Синхронизация после отрисовки UI; Supabase грузится лениво в sync.js
+    if (typeof sync !== 'undefined') {
+        setTimeout(() => {
+            sync.init({ quiet: hasLocalData }).then((result) => {
+                if (result.merged) refreshAppFromStorage();
+            }).catch(() => {});
+        }, 0);
+    }
 });
 
 async function retryCloudSync() {
@@ -122,7 +122,7 @@ async function retryCloudSync() {
         return;
     }
     if (typeof sync.ensureConfig === 'function') await sync.ensureConfig();
-    if (!sync.initClient()) {
+    if (!(await sync.initClient())) {
         showToastError(sync.getConfigError() || 'Синхронизация не настроена');
         return;
     }

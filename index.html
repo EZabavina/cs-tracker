@@ -416,14 +416,13 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="app.js"></script>
     <script src="app.stats.js"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v17';
+        const CST_SW_VERSION = 'cst-v19';
         if ('serviceWorker' in navigator) {
             let refreshing = false;
             navigator.serviceWorker.addEventListener('controllerchange', () => {
