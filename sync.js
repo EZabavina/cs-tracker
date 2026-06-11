@@ -1,45 +1,11 @@
 /**
  * Синхронизация localStorage ↔ Supabase (один пользователь, без авторизации).
+ * Запросы через REST API (fetch) — без CDN supabase-js.
  */
 const SYNC_TABLE = 'cst_app_data';
 const SYNC_ROW_ID = 'main';
 const SYNC_PUSH_DELAY_MS = 800;
 const SYNC_FETCH_TIMEOUT_MS = 12000;
-const SUPABASE_LIB_TIMEOUT_MS = 15000;
-const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js';
-
-let supabaseLoadPromise = null;
-
-function loadSupabaseLib() {
-    if (typeof supabase !== 'undefined' && typeof supabase.createClient === 'function') {
-        return Promise.resolve();
-    }
-    if (typeof window !== 'undefined' && window.supabase?.createClient) {
-        return Promise.resolve();
-    }
-    if (!supabaseLoadPromise) {
-        supabaseLoadPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = SUPABASE_CDN;
-            script.async = true;
-            script.onload = () => resolve();
-            script.onerror = () => {
-                supabaseLoadPromise = null;
-                reject(new Error('Не удалось загрузить библиотеку Supabase'));
-            };
-            document.head.appendChild(script);
-        });
-        supabaseLoadPromise = withTimeout(
-            supabaseLoadPromise,
-            SUPABASE_LIB_TIMEOUT_MS,
-            'Таймаут загрузки библиотеки Supabase'
-        ).catch((err) => {
-            supabaseLoadPromise = null;
-            throw err;
-        });
-    }
-    return supabaseLoadPromise;
-}
 
 function countStoredDates(entries) {
     const data = entries && typeof entries === 'object' ? entries : {};
@@ -52,6 +18,10 @@ function withTimeout(promise, ms, message) {
         timer = setTimeout(() => reject(new Error(message || 'Таймаут запроса')), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function isNetworkErrorMessage(msg) {
+    return /failed to fetch|networkerror|network error|load failed|таймаут|timeout|aborted/i.test(msg);
 }
 
 function parseTs(value) {
@@ -92,23 +62,12 @@ function mergeProfile(local, remote, localUpdatedAt, remoteUpdatedAt) {
 }
 
 const sync = {
-    client: null,
     enabled: false,
     pushTimer: null,
     pushing: false,
     pulling: false,
     status: 'idle',
     statusMessage: '',
-
-    getSupabaseLib() {
-        if (typeof supabase !== 'undefined' && typeof supabase.createClient === 'function') {
-            return supabase;
-        }
-        if (typeof window !== 'undefined' && window.supabase?.createClient) {
-            return window.supabase;
-        }
-        return null;
-    },
 
     getConfig() {
         if (typeof CST_CONFIG !== 'undefined') return this.normalizeConfig(CST_CONFIG);
@@ -151,32 +110,63 @@ const sync = {
             return 'В config.js укажите anon или publishable ключ из Supabase → Settings → API';
         }
         if (cfg.syncEnabled === false) return 'В config.js установите syncEnabled: true';
-        if (!this.getSupabaseLib()) {
-            return 'Не загрузилась библиотека Supabase (проверьте интернет и блокировщики)';
-        }
         return '';
     },
 
-    async initClient() {
-        if (this.client) return true;
-        if (!this.isConfigured()) return false;
+    restHeaders(cfg, extra) {
+        return {
+            apikey: cfg.supabaseAnonKey,
+            Authorization: 'Bearer ' + cfg.supabaseAnonKey,
+            ...(extra || {}),
+        };
+    },
 
-        try {
-            await loadSupabaseLib();
-        } catch {
-            return false;
+    async restFetch(path, options) {
+        const cfg = this.getConfig();
+        if (!cfg) throw new Error('Supabase не настроен');
+
+        const url = cfg.supabaseUrl + '/rest/v1/' + path;
+        const fetchOpts = {
+            cache: 'no-store',
+            method: 'GET',
+            ...options,
+            headers: this.restHeaders(cfg, options?.headers),
+        };
+
+        const res = await fetch(url, fetchOpts);
+        if (!res.ok) {
+            let detail = '';
+            try { detail = await res.text(); } catch (_) { /* ignore */ }
+            throw new Error('HTTP ' + res.status + (detail ? ': ' + detail.slice(0, 180) : ''));
         }
 
-        const lib = this.getSupabaseLib();
-        if (!lib) return false;
+        if (res.status === 204) return null;
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    },
 
-        const cfg = this.getConfig();
-        this.client = lib.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false,
+    async fetchAppRow(columns) {
+        const cols = columns || 'entries,profile,profile_updated_at';
+        const rows = await this.restFetch(
+            SYNC_TABLE + '?id=eq.' + encodeURIComponent(SYNC_ROW_ID) + '&select=' + encodeURIComponent(cols)
+        );
+        return Array.isArray(rows) && rows.length ? rows[0] : null;
+    },
+
+    async upsertAppRow(payload) {
+        await this.restFetch(SYNC_TABLE + '?on_conflict=id', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Prefer: 'resolution=merge-duplicates,return=minimal',
             },
+            body: JSON.stringify(payload),
         });
+    },
+
+    async initClient() {
+        if (this.enabled) return true;
+        if (!this.isConfigured()) return false;
         this.enabled = true;
         return true;
     },
@@ -258,10 +248,6 @@ const sync = {
                 this.schedulePush(0);
                 this.syncNow({ quiet: true }).catch(() => {});
             });
-            window.addEventListener('offline', () => {
-                if (this.pulling || this.pushing) return;
-                this.setStatus('offline', 'Нет сети — изменения сохраняются локально');
-            });
         }
 
         const quiet = opts && opts.quiet;
@@ -308,17 +294,11 @@ const sync = {
         if (!quiet) this.setStatus('syncing', 'Загрузка данных из облака…');
 
         try {
-            const { data, error } = await withTimeout(
-                this.client
-                    .from(SYNC_TABLE)
-                    .select('entries, profile, profile_updated_at')
-                    .eq('id', SYNC_ROW_ID)
-                    .maybeSingle(),
+            const data = await withTimeout(
+                this.fetchAppRow(),
                 SYNC_FETCH_TIMEOUT_MS,
                 'Таймаут загрузки из облака'
             );
-
-            if (error) throw error;
 
             if (!data) {
                 const localDates = countStoredDates(storage.loadEntries());
@@ -385,11 +365,10 @@ const sync = {
         } catch (err) {
             const msg = err.message || String(err);
             const localEmpty = countStoredDates(storage.loadEntries()) === 0;
-            const isOffline = !navigator.onLine
-                || /failed to fetch|network|load failed|offline|таймаут/i.test(msg);
+            const networkErr = isNetworkErrorMessage(msg);
             if (!quiet || localEmpty) {
-                this.setStatus(isOffline ? 'offline' : 'error', isOffline
-                    ? 'Нет сети — нажмите облако для повтора'
+                this.setStatus(networkErr ? 'offline' : 'error', networkErr
+                    ? 'Не удалось связаться с облаком — нажмите облако для повтора'
                     : msg);
                 console.error('[CST sync]', msg, err);
             } else {
@@ -417,16 +396,11 @@ const sync = {
 
             if (localDates.length === 0) {
                 try {
-                    const { data: remote, error } = await withTimeout(
-                        this.client
-                            .from(SYNC_TABLE)
-                            .select('entries')
-                            .eq('id', SYNC_ROW_ID)
-                            .maybeSingle(),
+                    const remote = await withTimeout(
+                        this.fetchAppRow('entries'),
                         SYNC_FETCH_TIMEOUT_MS,
                         'Таймаут проверки облака'
                     );
-                    if (error) throw error;
                     const remoteEntries = remote?.entries && typeof remote.entries === 'object' ? remote.entries : {};
                     const remoteDates = Object.keys(remoteEntries).filter((k) => DATE_KEY_RE.test(k));
                     if (remoteDates.length > 0) {
@@ -451,15 +425,11 @@ const sync = {
                 profile_updated_at: meta.profileUpdatedAt || new Date().toISOString(),
             };
 
-            const { error } = await withTimeout(
-                this.client
-                    .from(SYNC_TABLE)
-                    .upsert(payload, { onConflict: 'id' }),
+            await withTimeout(
+                this.upsertAppRow(payload),
                 SYNC_FETCH_TIMEOUT_MS,
                 'Таймаут отправки в облако'
             );
-
-            if (error) throw error;
 
             meta.lastPushAt = new Date().toISOString();
             storage.saveMeta(meta);
@@ -467,11 +437,10 @@ const sync = {
             if (!force && !quiet) this.setStatus('synced', 'Сохранено в облаке');
         } catch (err) {
             const msg = err.message || 'Не удалось отправить в облако';
-            const isOffline = !navigator.onLine
-                || /failed to fetch|network|load failed|offline|таймаут/i.test(msg);
+            const networkErr = isNetworkErrorMessage(msg);
             if (!quiet) {
-                this.setStatus(isOffline ? 'offline' : 'error', isOffline
-                    ? 'Нет сети — отправка отложена'
+                this.setStatus(networkErr ? 'offline' : 'error', networkErr
+                    ? 'Не удалось связаться с облаком — отправка отложена'
                     : msg);
             } else {
                 console.warn('[CST sync] push (quiet):', msg);
