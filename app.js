@@ -26,6 +26,7 @@ const MAX_EXERCISE_ROWS = 20;
 
 let autoSaveTimer = null;
 let lastFocusedEl = null;
+let statisticsReady = false;
 
 // --- Даты ---
 function getToday() {
@@ -99,6 +100,20 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCopyBtn();
     updateTrackerView();
 
+    initSyncStatusButton();
+    initSyncResume();
+
+    if (typeof sync !== 'undefined') {
+        runInitialCloudSync(hasLocalData, showProfileSkeleton);
+    } else if (showProfileSkeleton) {
+        setProfileLoading(false);
+    }
+});
+
+function ensureStatisticsReady() {
+    if (statisticsReady) return;
+    statisticsReady = true;
+
     const today = getToday();
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -107,19 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mountDateRangePicker();
     initChartFilters();
     initChartCompareFilters();
-    initSyncStatusButton();
-
-    initSyncResume();
-
-    // Синхронизация после отрисовки UI; Supabase грузится лениво в sync.js
-    if (typeof sync !== 'undefined') {
-        setTimeout(() => {
-            runInitialCloudSync(hasLocalData, showProfileSkeleton);
-        }, 0);
-    } else if (showProfileSkeleton) {
-        setProfileLoading(false);
-    }
-});
+}
 
 function storageFingerprint() {
     return JSON.stringify(storage.loadEntries()) + '|' + JSON.stringify(storage.loadProfile());
@@ -127,7 +130,7 @@ function storageFingerprint() {
 
 function applySyncToUi(beforeFp) {
     const changed = storageFingerprint() !== beforeFp;
-    if (changed) refreshAppFromStorage();
+    if (changed) refreshTrackerFromStorage();
 }
 
 async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {
@@ -135,6 +138,7 @@ async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {
     try {
         await sync.init({ quiet: hasLocalData });
         applySyncToUi(beforeFp);
+        sync.updateStatusUi();
     } catch (_) { /* ignore */ }
     finally {
         if (showProfileSkeleton) setProfileLoading(false);
@@ -242,7 +246,10 @@ function switchView(view) {
         v.classList.toggle('active', v.id === 'view' + view.charAt(0).toUpperCase() + view.slice(1));
     });
     document.getElementById('calBtn')?.classList.toggle('active', false);
-    if (view === 'statistics') renderStats();
+    if (view === 'statistics') {
+        ensureStatisticsReady();
+        renderStats();
+    }
 }
 
 // Навигация по датам на главном экране
@@ -943,7 +950,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
-function refreshAppFromStorage() {
+function refreshTrackerFromStorage() {
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
     state.trackerEditMode = false;
@@ -952,9 +959,13 @@ function refreshAppFromStorage() {
     renderCalendar();
     updateDaysCounter();
     updateCopyBtn();
-    renderExerciseNameSuggestions();
     updateTrackerView();
     if (state.currentView === 'statistics') renderStats();
+}
+
+function refreshAppFromStorage() {
+    refreshTrackerFromStorage();
+    renderExerciseNameSuggestions();
 }
 
 function handleBackupFileSelect(e) {

@@ -18,7 +18,7 @@
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <title>Central Sensitization Tracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=22">
+    <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
     <!-- Profile Modal -->
@@ -417,12 +417,15 @@
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
 
     <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
-    <script src="storage.js?v=22"></script>
-    <script src="sync.js?v=22"></script>
-    <script src="app.js?v=22"></script>
-    <script src="app.stats.js?v=22"></script>
+    <script src="storage.js?v=23"></script>
+    <script src="sync.js?v=23"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v22';
+        if (typeof sync !== 'undefined' && sync.beginEarlySync) sync.beginEarlySync();
+    </script>
+    <script src="app.js?v=23"></script>
+    <script src="app.stats.js?v=23"></script>
+    <script>
+        const CST_SW_VERSION = 'cst-v23';
         if ('serviceWorker' in navigator) {
             let refreshing = false;
             navigator.serviceWorker.addEventListener('controllerchange', () => {

@@ -171,6 +171,40 @@ const sync = {
         return true;
     },
 
+    bindOnlineHandlers() {
+        if (this._onlineBound) return;
+        this._onlineBound = true;
+        window.addEventListener('online', () => {
+            this.schedulePush(0);
+            this.syncNow({ quiet: true }).catch(() => {});
+        });
+    },
+
+    /** Ранний pull сразу после config + storage + sync (до app.js). */
+    beginEarlySync() {
+        if (this.earlySyncPromise) return this.earlySyncPromise;
+
+        this.earlySyncPromise = (async () => {
+            await this.ensureConfig();
+            this.bindOnlineHandlers();
+            if (!(await this.initClient())) {
+                const hint = this.getConfigError() || 'Supabase не настроен — данные только на этом устройстве';
+                this.setStatus('disabled', hint);
+                console.warn('[CST sync]', hint);
+                return { merged: false };
+            }
+
+            const quiet = countStoredDates(storage.loadEntries()) > 0;
+            if (!quiet) this.setStatus('syncing', 'Загрузка данных из облака…');
+            return this.syncNow({ quiet });
+        })().catch((err) => {
+            console.warn('[CST sync] early sync:', err.message || err);
+            return { merged: false };
+        });
+
+        return this.earlySyncPromise;
+    },
+
     getConfigUrl() {
         return new URL('config.js', document.baseURI).href;
     },
@@ -233,6 +267,12 @@ const sync = {
     },
 
     async init(opts) {
+        this.bindOnlineHandlers();
+
+        if (this.earlySyncPromise) {
+            return this.earlySyncPromise;
+        }
+
         await this.ensureConfig();
 
         if (!(await this.initClient())) {
@@ -240,14 +280,6 @@ const sync = {
             this.setStatus('disabled', hint);
             console.warn('[CST sync]', hint);
             return { merged: false };
-        }
-
-        if (!this._onlineBound) {
-            this._onlineBound = true;
-            window.addEventListener('online', () => {
-                this.schedulePush(0);
-                this.syncNow({ quiet: true }).catch(() => {});
-            });
         }
 
         const quiet = opts && opts.quiet;
