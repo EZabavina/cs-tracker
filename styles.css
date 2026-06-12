@@ -104,6 +104,17 @@ body {
 .sync-status-error { color: var(--danger); background: rgba(255, 59, 48, 0.12); }
 .sync-status-disabled { color: var(--text-muted); }
 
+html:not(.fa-ready) .sync-status i { visibility: hidden; }
+html:not(.fa-ready) .sync-status::before {
+    content: '☁';
+    font-size: 1rem;
+    line-height: 1;
+}
+html:not(.fa-ready) .sync-status-syncing::before { content: '↻'; }
+html:not(.fa-ready) .sync-status-synced::before { content: '✓'; }
+html:not(.fa-ready) .sync-status-error::before { content: '!'; }
+html:not(.fa-ready) .sync-status-disabled::before { content: '▣'; }
+
 .app-title {
     font-size: 1.25rem;
     font-weight: 600;

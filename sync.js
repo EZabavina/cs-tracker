@@ -145,8 +145,24 @@ const sync = {
         return text ? JSON.parse(text) : null;
     },
 
+    async consumePrefetchedRow() {
+        if (typeof window === 'undefined' || !window.__cstPrefetchPromise) return null;
+        const promise = window.__cstPrefetchPromise;
+        window.__cstPrefetchPromise = null;
+        try {
+            const rows = await promise;
+            return Array.isArray(rows) && rows.length ? rows[0] : null;
+        } catch (_) {
+            return null;
+        }
+    },
+
     async fetchAppRow(columns) {
         const cols = columns || 'entries,profile,profile_updated_at';
+        if (cols === 'entries,profile,profile_updated_at') {
+            const prefetched = await this.consumePrefetchedRow();
+            if (prefetched) return prefetched;
+        }
         const rows = await this.restFetch(
             SYNC_TABLE + '?id=eq.' + encodeURIComponent(SYNC_ROW_ID) + '&select=' + encodeURIComponent(cols)
         );

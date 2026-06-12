@@ -27,6 +27,8 @@ const MAX_EXERCISE_ROWS = 20;
 let autoSaveTimer = null;
 let lastFocusedEl = null;
 let statisticsReady = false;
+let trackerUiReady = false;
+let pendingTrackerRefresh = false;
 
 // --- Даты ---
 function getToday() {
@@ -76,21 +78,60 @@ function countDaysWithoutRecord() {
     return days;
 }
 
-// Init — UI сразу из localStorage, синхронизация в фоне
+// Init — shell сразу, sync параллельно, трекер в idle
 document.addEventListener('DOMContentLoaded', () => {
     const hasLocalData = hasLocalEntries();
+    const showProfileSkeleton = !hasLocalData && !storage.loadProfile().name;
+
+    initShellUi(showProfileSkeleton);
+
+    const syncPromise = typeof sync !== 'undefined'
+        ? runInitialCloudSync(hasLocalData, showProfileSkeleton)
+        : Promise.resolve().finally(() => {
+            if (showProfileSkeleton) setProfileLoading(false);
+        });
+
+    runWhenIdle(() => {
+        initTrackerUi();
+        syncPromise.then(() => {
+            if (pendingTrackerRefresh) {
+                pendingTrackerRefresh = false;
+                refreshTrackerFromStorage();
+            }
+        });
+    });
+});
+
+function runWhenIdle(fn, timeoutMs) {
+    if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(fn, { timeout: timeoutMs ?? 400 });
+    } else {
+        setTimeout(fn, 0);
+    }
+}
+
+function initShellUi(showProfileSkeleton) {
+    state.data = storage.loadEntries();
+    state.profile = storage.loadProfile();
+    if (showProfileSkeleton) setProfileLoading(true);
+    else updateProfileDisplay();
+
+    initSyncStatusButton();
+    initSyncResume();
+    setupTabs();
+}
+
+function initTrackerUi() {
+    if (trackerUiReady) return;
+    trackerUiReady = true;
 
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
-    const showProfileSkeleton = !hasLocalEntries() && !state.profile.name;
-    if (showProfileSkeleton) setProfileLoading(true);
-    else updateProfileDisplay();
     state.selectedDate = getToday();
     state.currentDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
 
     initQuickButtons();
     initExerciseEditor();
-    setupTabs();
     setupAutoSave();
     renderCalendar();
     loadDataToForm();
@@ -99,16 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDaysCounter();
     updateCopyBtn();
     updateTrackerView();
-
-    initSyncStatusButton();
-    initSyncResume();
-
-    if (typeof sync !== 'undefined') {
-        runInitialCloudSync(hasLocalData, showProfileSkeleton);
-    } else if (showProfileSkeleton) {
-        setProfileLoading(false);
-    }
-});
+}
 
 function ensureStatisticsReady() {
     if (statisticsReady) return;
@@ -130,7 +162,15 @@ function storageFingerprint() {
 
 function applySyncToUi(beforeFp) {
     const changed = storageFingerprint() !== beforeFp;
-    if (changed) refreshTrackerFromStorage();
+    if (!changed) return;
+    state.data = storage.loadEntries();
+    state.profile = storage.loadProfile();
+    updateProfileDisplay();
+    if (!trackerUiReady) {
+        pendingTrackerRefresh = true;
+        return;
+    }
+    refreshTrackerFromStorage();
 }
 
 async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {

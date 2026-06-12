@@ -14,11 +14,30 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
     <meta name="robots" content="noindex, nofollow">
     <link rel="preconnect" href="https://baynvciqzrabqyipwlfa.supabase.co" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://baynvciqzrabqyipwlfa.supabase.co">
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <title>Central Sensitization Tracker</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=23">
+    <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
+    <script>
+        (function () {
+            var cfg = typeof CST_CONFIG !== 'undefined' ? CST_CONFIG : window.CST_CONFIG;
+            if (!cfg || !cfg.supabaseUrl || !cfg.supabaseAnonKey) return;
+            var base = String(cfg.supabaseUrl).replace(/\/$/, '');
+            var key = String(cfg.supabaseAnonKey).trim();
+            var url = base + '/rest/v1/cst_app_data?id=eq.main&select=entries,profile,profile_updated_at';
+            window.__cstPrefetchPromise = fetch(url, {
+                cache: 'no-store',
+                headers: { apikey: key, Authorization: 'Bearer ' + key },
+            }).then(function (res) {
+                return res.ok ? res.json() : null;
+            }).catch(function () {
+                return null;
+            });
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all';document.documentElement.classList.add('fa-ready')">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
     <!-- Profile Modal -->
@@ -416,16 +435,15 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
 
-    <script src="config.js" onerror="window.__cstConfigMissing=true; console.error('[CST] config.js не загружен — синхронизация с Supabase недоступна')"></script>
-    <script src="storage.js?v=23"></script>
-    <script src="sync.js?v=23"></script>
+    <script src="storage.js?v=24"></script>
+    <script src="sync.js?v=24"></script>
     <script>
         if (typeof sync !== 'undefined' && sync.beginEarlySync) sync.beginEarlySync();
     </script>
-    <script src="app.js?v=23"></script>
-    <script src="app.stats.js?v=23"></script>
+    <script src="app.js?v=24"></script>
+    <script src="app.stats.js?v=24"></script>
     <script>
-        const CST_SW_VERSION = 'cst-v23';
+        const CST_SW_VERSION = 'cst-v24';
         if ('serviceWorker' in navigator) {
             let refreshing = false;
             navigator.serviceWorker.addEventListener('controllerchange', () => {
