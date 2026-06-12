@@ -61,6 +61,26 @@ function mergeProfile(local, remote, localUpdatedAt, remoteUpdatedAt) {
     return remoteMs > localMs ? normalizeProfile(remote) : normalizeProfile(local);
 }
 
+function importRemoteSnapshot(data) {
+    const entries = {};
+    const raw = data?.entries && typeof data.entries === 'object' ? data.entries : {};
+    for (const [key, val] of Object.entries(raw)) {
+        if (!DATE_KEY_RE.test(key)) continue;
+        const entry = normalizeEntry(val);
+        if (entry) entries[key] = entry;
+    }
+    return {
+        entries,
+        profile: normalizeProfile(data?.profile),
+    };
+}
+
+function isLocalStorageEmpty() {
+    const profile = storage.loadProfile();
+    return countStoredDates(storage.loadEntries()) === 0
+        && !profile.name && !profile.gender && !profile.age;
+}
+
 const sync = {
     enabled: false,
     pushTimer: null,
@@ -362,6 +382,25 @@ const sync = {
             const localEntries = storage.loadEntries();
             const localProfile = storage.loadProfile();
             const meta = storage.loadMeta();
+
+            if (isLocalStorageEmpty()) {
+                const { entries: remoteEntries, profile: remoteProfile } = importRemoteSnapshot(data);
+                const hasRemoteData = countStoredDates(remoteEntries) > 0
+                    || remoteProfile.name || remoteProfile.gender || remoteProfile.age;
+
+                if (hasRemoteData) {
+                    storage.saveEntries(remoteEntries, { skipSync: true });
+                    storage.saveProfile(remoteProfile, { skipSync: true });
+                    meta.lastPullAt = new Date().toISOString();
+                    storage.saveMeta(meta);
+                    if (!quiet) {
+                        this.setStatus('synced', 'Данные загружены из облака');
+                    } else if (this.status !== 'error') {
+                        this.setStatus('synced', 'Синхронизировано');
+                    }
+                    return { merged: true };
+                }
+            }
 
             const mergedEntries = mergeEntries(localEntries, data.entries);
             const mergedProfile = mergeProfile(

@@ -8,7 +8,7 @@ function loadSyncSandbox() {
     vm.createContext(sandbox);
     let code = fs.readFileSync('storage.js', 'utf8');
     code += fs.readFileSync('sync.js', 'utf8');
-    code += '\nthis.__mergeEntries = mergeEntries; this.__mergeProfile = mergeProfile;';
+    code += '\nthis.__mergeEntries = mergeEntries; this.__mergeProfile = mergeProfile; this.__importRemoteSnapshot = importRemoteSnapshot;';
     vm.runInContext(code, sandbox);
     return sandbox;
 }
@@ -40,4 +40,20 @@ test('mergeProfile выбирает профиль с более поздним 
 
     const keepRemote = sb.__mergeProfile(local, remote, '2026-05-01T12:00:00.000Z', '2026-05-02T12:00:00.000Z');
     assert.equal(keepRemote.name, 'Оля');
+});
+
+test('importRemoteSnapshot нормализует облачный снимок без merge', () => {
+    const sb = loadSyncSandbox();
+    const snapshot = sb.__importRemoteSnapshot({
+        entries: {
+            '2026-05-01': { pain: 11, ts: '2026-05-01T10:00:00.000Z', saved: true },
+            'bad-key': { pain: 5 },
+        },
+        profile: { name: '  Test  ', gender: 'male', age: 40 },
+    });
+
+    assert.equal(Object.keys(snapshot.entries).length, 1);
+    assert.equal(snapshot.entries['2026-05-01'].pain, 10);
+    assert.equal(snapshot.profile.name, 'Test');
+    assert.equal(snapshot.profile.age, '40');
 });
