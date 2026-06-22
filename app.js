@@ -11,7 +11,8 @@ const state = {
     chartFilter: 'all',
     chartCompare: 'off',
     trackerEditMode: false,
-    profileLoading: false
+    profileLoading: false,
+    trackerLoading: false
 };
 
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -81,14 +82,16 @@ function countDaysWithoutRecord() {
 // Init — shell сразу, sync параллельно, трекер в idle
 document.addEventListener('DOMContentLoaded', () => {
     const hasLocalData = hasLocalEntries();
-    const showProfileSkeleton = !hasLocalData && !storage.loadProfile().name;
+    const awaitingCloud = !hasLocalData;
+    const showProfileSkeleton = awaitingCloud && !storage.loadProfile().name;
+    const showTrackerLoading = awaitingCloud;
 
-    initShellUi(showProfileSkeleton);
+    initShellUi(showProfileSkeleton, showTrackerLoading);
 
     const syncPromise = typeof sync !== 'undefined'
-        ? runInitialCloudSync(hasLocalData, showProfileSkeleton)
+        ? runInitialCloudSync(hasLocalData, showProfileSkeleton, showTrackerLoading)
         : Promise.resolve().finally(() => {
-            if (showProfileSkeleton) setProfileLoading(false);
+            finishCloudBootstrapUi(showProfileSkeleton, showTrackerLoading);
         });
 
     runWhenIdle(() => {
@@ -110,13 +113,16 @@ function runWhenIdle(fn, timeoutMs) {
     }
 }
 
-function initShellUi(showProfileSkeleton) {
+function initShellUi(showProfileSkeleton, showTrackerLoading) {
     state.data = storage.loadEntries();
     state.profile = storage.loadProfile();
     if (showProfileSkeleton) setProfileLoading(true);
     else updateProfileDisplay();
 
+    if (showTrackerLoading) setTrackerLoading(true);
+
     initSyncStatusButton();
+    if (typeof sync !== 'undefined' && sync.updateStatusUi) sync.updateStatusUi();
     initSyncResume();
     setupTabs();
 }
@@ -173,7 +179,7 @@ function applySyncToUi(beforeFp) {
     refreshTrackerFromStorage();
 }
 
-async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {
+async function runInitialCloudSync(hasLocalData, showProfileSkeleton, showTrackerLoading) {
     const beforeFp = storageFingerprint();
     try {
         await sync.init({ quiet: hasLocalData });
@@ -181,7 +187,15 @@ async function runInitialCloudSync(hasLocalData, showProfileSkeleton) {
         sync.updateStatusUi();
     } catch (_) { /* ignore */ }
     finally {
-        if (showProfileSkeleton) setProfileLoading(false);
+        finishCloudBootstrapUi(showProfileSkeleton, showTrackerLoading);
+    }
+}
+
+function finishCloudBootstrapUi(showProfileSkeleton, showTrackerLoading) {
+    if (showProfileSkeleton) setProfileLoading(false);
+    if (showTrackerLoading) {
+        setTrackerLoading(false);
+        if (trackerUiReady) refreshTrackerFromStorage();
     }
 }
 
@@ -226,8 +240,11 @@ async function retryCloudSync() {
     }
     sync.setStatus('syncing', 'Синхронизация…');
     const hadData = hasLocalEntries();
-    const showProfileSkeleton = !state.profile.name && !hadData;
+    const awaitingCloud = !hadData;
+    const showProfileSkeleton = !state.profile.name && awaitingCloud;
+    const showTrackerLoading = awaitingCloud;
     if (showProfileSkeleton) setProfileLoading(true);
+    if (showTrackerLoading) setTrackerLoading(true);
     const beforeFp = storageFingerprint();
     try {
         await sync.syncNow();
@@ -238,7 +255,7 @@ async function retryCloudSync() {
             showToast('Синхронизация успешна ✓');
         }
     } finally {
-        if (showProfileSkeleton) setProfileLoading(false);
+        finishCloudBootstrapUi(showProfileSkeleton, showTrackerLoading);
     }
 }
 
@@ -903,6 +920,21 @@ function hasLocalEntries() {
 function setProfileLoading(loading) {
     state.profileLoading = !!loading;
     updateProfileDisplay();
+}
+
+function setTrackerLoading(loading) {
+    state.trackerLoading = !!loading;
+    const panel = document.getElementById('trackerLoading');
+    const form = document.getElementById('trackerForm');
+    const summary = document.getElementById('trackerSummary');
+    const view = document.getElementById('viewTracker');
+
+    if (panel) panel.hidden = !loading;
+    if (form) form.hidden = loading;
+    if (summary && loading) summary.hidden = true;
+    view?.classList.toggle('tracker-awaiting-cloud', loading);
+    if (loading) view?.setAttribute('aria-busy', 'true');
+    else view?.removeAttribute('aria-busy');
 }
 
 function updateProfileDisplay() {
